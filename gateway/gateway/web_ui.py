@@ -41,7 +41,7 @@ _T = {
         "knox_password": "Пароль",
         "knox_gateway_url": "Knox Gateway URL",
         "verify_ssl": "Проверять SSL",
-        "readonly": "Только чтение",
+        "allow_write": "Разрешить запись",
         "default_conn": "По умолчанию",
         "btn_connect": "Подключить",
         "btn_test": "Тест",
@@ -93,7 +93,7 @@ _T = {
         "knox_password": "Password",
         "knox_gateway_url": "Knox Gateway URL",
         "verify_ssl": "Verify SSL",
-        "readonly": "Read-only",
+        "allow_write": "Allow write",
         "default_conn": "Default",
         "btn_connect": "Connect",
         "btn_test": "Test",
@@ -143,8 +143,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 /* ── Header ── */
 .header{background:#1e293b;border-bottom:1px solid #334155;padding:8px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;flex-shrink:0}
 .header-left{display:flex;align-items:center;gap:10px}
-.logo{display:flex;align-items:center;gap:6px}
-.logo svg{width:28px;height:28px}
 .header h1{font-size:1.05rem;color:#f8fafc;font-weight:700}
 .header .sub{color:#64748b;font-size:.75rem}
 .header-right{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -214,6 +212,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
 .form-group{display:flex;flex-direction:column;gap:3px}
 .form-group.full{grid-column:1/-1}
 .form-group label{font-size:.65rem;color:#64748b;text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+input[type="file"]{padding:4px 8px;font-size:.75rem}
+input[type="file"]::file-selector-button{padding:3px 10px;border-radius:4px;border:1px solid #475569;background:#1e293b;color:#94a3b8;font-size:.75rem;cursor:pointer;margin-right:8px;transition:.15s}
+input[type="file"]::file-selector-button:hover{background:#334155;color:#f8fafc}
 input,select,textarea{padding:5px 8px;border-radius:4px;border:1px solid #475569;background:#0f172a;color:#e2e8f0;font-size:.8rem;transition:border .15s;width:100%;font-family:inherit;-moz-appearance:textfield}
 input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 input:focus,select:focus,textarea:focus{outline:none;border-color:#38bdf8}
@@ -267,9 +268,6 @@ textarea{resize:vertical;min-height:40px}
 
 <div class="header">
   <div class="header-left">
-    <div class="logo">
-      <svg viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="4" fill="#0ea5e9"/><text x="14" y="19" text-anchor="middle" fill="white" font-size="12" font-weight="bold" font-family="system-ui">Ni</text></svg>
-    </div>
     <div><h1>nifi-mcp-universal</h1><span class="sub">{{subtitle}}</span></div>
   </div>
   <div class="header-right">
@@ -355,15 +353,15 @@ textarea{resize:vertical;min-height:40px}
       </div>
       <div class="form-group" style="margin-top:2px">
         <label class="toggle">
-          <input type="checkbox" id="f-ro" checked>
+          <input type="checkbox" id="f-aw">
           <span class="toggle-track"></span>
-          {{readonly}}
+          {{allow_write}}
         </label>
       </div>
     </div>
     <div class="form-actions">
       <button class="btn" onclick="testConn()">{{btn_test}}</button>
-      <button class="btn btn-p" onclick="connectNifi()">&#8594; {{btn_connect}}</button>
+      <button class="btn" onclick="connectNifi()">&#8594; {{btn_connect}}</button>
     </div>
   </div>
 
@@ -399,6 +397,11 @@ function toggleAuth(prefix) {
   });
   var target = container.querySelector('#' + (prefix === 'f' ? 'af-' : 'eaf-') + method);
   if (target) target.classList.add('active');
+  // Auto-uncheck SSL verify for certificate auth (self-signed certs are typical for NiFi)
+  var sslCheckbox = document.getElementById(prefix === 'f' ? 'f-ssl' : 'e-ssl');
+  if (sslCheckbox && (method === 'certificate_p12' || method === 'certificate_pem')) {
+    sslCheckbox.checked = false;
+  }
 }
 
 function authLabel(method) {
@@ -458,7 +461,7 @@ async function connectNifi() {
   form.append('url', url);
   form.append('auth_method', auth);
   form.append('verify_ssl', document.getElementById('f-ssl').checked ? 'true' : 'false');
-  form.append('readonly', document.getElementById('f-ro').checked ? 'true' : 'false');
+  form.append('readonly', document.getElementById('f-aw').checked ? 'false' : 'true');
 
   if (auth === 'certificate_p12') {
     var cf = document.getElementById('f-cert').files[0];
@@ -535,16 +538,46 @@ async function editConn(name) {
         '<div class="form-group full"><label>' + T.auth_method + '</label><select id="e-auth" onchange="toggleAuth(\'e\')">' +
           AUTH_METHODS.map(function(m){ return '<option value="'+m+'"'+(c.auth_method===m?' selected':'')+'>'+authLabel(m)+'</option>'; }).join('') +
         '</select></div>' +
+        /* P12 */
+        '<div class="auth-fields" id="eaf-certificate_p12">' +
+          '<div class="form-group"><label>' + T.certificate + '</label><input id="e-cert" type="file" accept=".p12,.pfx">' + (c.cert_path ? '<span style="font-size:.7rem;color:#64748b;margin-top:2px">' + c.cert_path + '</span>' : '') + '</div>' +
+          '<div class="form-group"><label>' + T.cert_password + '</label><input id="e-certpw" type="password" placeholder="' + (c.cert_password === '***' ? '••••••' : '') + '"></div>' +
+        '</div>' +
+        /* PEM */
+        '<div class="auth-fields" id="eaf-certificate_pem">' +
+          '<div class="form-group"><label>' + T.certificate + ' (.pem/.crt)</label><input id="e-pemcert" type="file" accept=".pem,.crt">' + (c.cert_path ? '<span style="font-size:.7rem;color:#64748b;margin-top:2px">' + c.cert_path + '</span>' : '') + '</div>' +
+          '<div class="form-group"><label>' + T.cert_key + '</label><input id="e-pemkey" type="file" accept=".key,.pem">' + (c.cert_key_path ? '<span style="font-size:.7rem;color:#64748b;margin-top:2px">' + c.cert_key_path + '</span>' : '') + '</div>' +
+        '</div>' +
+        /* Knox Token */
+        '<div class="auth-fields" id="eaf-knox_token">' +
+          '<div class="form-group full"><label>' + T.knox_token + '</label><textarea id="e-ktoken" rows="2">' + (c.knox_token !== '***' ? (c.knox_token||'') : '') + '</textarea></div>' +
+        '</div>' +
+        /* Knox Cookie */
+        '<div class="auth-fields" id="eaf-knox_cookie">' +
+          '<div class="form-group full"><label>' + T.knox_cookie + '</label><textarea id="e-kcookie" rows="2">' + (c.knox_cookie !== '***' ? (c.knox_cookie||'') : '') + '</textarea></div>' +
+        '</div>' +
+        /* Knox Passcode */
+        '<div class="auth-fields" id="eaf-knox_passcode">' +
+          '<div class="form-group"><label>' + T.knox_passcode + '</label><textarea id="e-kpass" rows="2">' + (c.knox_passcode !== '***' ? (c.knox_passcode||'') : '') + '</textarea></div>' +
+          '<div class="form-group"><label>' + T.knox_gateway_url + '</label><input id="e-kgw1" value="' + (c.knox_gateway_url||'') + '"></div>' +
+        '</div>' +
+        /* Basic */
+        '<div class="auth-fields" id="eaf-basic">' +
+          '<div class="form-group"><label>' + T.knox_user + '</label><input id="e-user" value="' + (c.knox_user||'') + '"></div>' +
+          '<div class="form-group"><label>' + T.knox_password + '</label><input id="e-pass" type="password" placeholder="' + (c.knox_password === '***' ? '••••••' : '') + '"></div>' +
+          '<div class="form-group full"><label>' + T.knox_gateway_url + '</label><input id="e-kgw2" value="' + (c.knox_gateway_url||'') + '"></div>' +
+        '</div>' +
         '<div class="form-group" style="margin-top:2px"><label class="toggle"><input type="checkbox" id="e-ssl" '+(c.verify_ssl?'checked':'')+'><span class="toggle-track"></span>' + T.verify_ssl + '</label></div>' +
-        '<div class="form-group" style="margin-top:2px"><label class="toggle"><input type="checkbox" id="e-ro" '+(c.readonly?'checked':'')+'><span class="toggle-track"></span>' + T.readonly + '</label></div>' +
+        '<div class="form-group" style="margin-top:2px"><label class="toggle"><input type="checkbox" id="e-aw" '+(!c.readonly?'checked':'')+'><span class="toggle-track"></span>' + T.allow_write + '</label></div>' +
       '</div>' +
       '<div class="modal-actions">' +
         '<button class="btn" onclick="this.closest(\'.overlay\').remove()">' + T.btn_cancel + '</button>' +
-        '<button class="btn btn-p" onclick="saveEdit(\'' + name + '\')">' + T.btn_save + '</button>' +
+        '<button class="btn" onclick="saveEdit(\'' + name + '\')">' + T.btn_save + '</button>' +
       '</div>' +
     '</div>';
 
   document.body.appendChild(ov);
+  toggleAuth('e');
   ov.addEventListener('click', function(e) { if (e.target === ov) ov.remove(); });
 }
 
@@ -553,15 +586,49 @@ async function saveEdit(oldName) {
   var url = document.getElementById('e-url').value.trim();
   var auth = document.getElementById('e-auth').value;
   var ssl = document.getElementById('e-ssl').checked;
-  var ro = document.getElementById('e-ro').checked;
+  var aw = document.getElementById('e-aw').checked;
 
   if (!newName || !url) { toast(T.fill_fields, true); return; }
 
-  var r = await api('/api/edit', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ old_name: oldName, name: newName, url: url, auth_method: auth, verify_ssl: ssl, readonly: ro })
-  });
+  var form = new FormData();
+  form.append('old_name', oldName);
+  form.append('name', newName);
+  form.append('url', url);
+  form.append('auth_method', auth);
+  form.append('verify_ssl', ssl ? 'true' : 'false');
+  form.append('readonly', aw ? 'false' : 'true');
+
+  if (auth === 'certificate_p12') {
+    var cf = document.getElementById('e-cert').files[0];
+    if (cf) form.append('cert_file', cf);
+    var pw = document.getElementById('e-certpw').value;
+    if (pw) form.append('cert_password', pw);
+  } else if (auth === 'certificate_pem') {
+    var pf = document.getElementById('e-pemcert').files[0];
+    if (pf) form.append('cert_file', pf);
+    var kf = document.getElementById('e-pemkey').files[0];
+    if (kf) form.append('key_file', kf);
+  } else if (auth === 'knox_token') {
+    var kt = document.getElementById('e-ktoken').value;
+    if (kt) form.append('knox_token', kt);
+  } else if (auth === 'knox_cookie') {
+    var kc = document.getElementById('e-kcookie').value;
+    if (kc) form.append('knox_cookie', kc);
+  } else if (auth === 'knox_passcode') {
+    var kp = document.getElementById('e-kpass').value;
+    if (kp) form.append('knox_passcode', kp);
+    form.append('knox_gateway_url', document.getElementById('e-kgw1').value);
+  } else if (auth === 'basic') {
+    form.append('knox_user', document.getElementById('e-user').value);
+    var bp = document.getElementById('e-pass').value;
+    if (bp) form.append('knox_password', bp);
+    form.append('knox_gateway_url', document.getElementById('e-kgw2').value);
+  }
+
+  try {
+    var resp = await fetch('/api/edit', { method: 'POST', body: form });
+    var r = await resp.json();
+  } catch(e) { toast(T.msg_error + ': ' + e.message, true); return; }
 
   if (r && r.error) { toast(T.msg_error + ': ' + r.error, true); return; }
   document.querySelector('.overlay').remove();
@@ -595,6 +662,7 @@ async function doDelete(name) {
 }
 
 loadConns();
+toggleAuth();
 </script>
 <div class="footer">
 nifi-mcp-universal &mdash;
@@ -1039,10 +1107,25 @@ async def api_disconnect(request: Request) -> Response:
 
 
 async def api_edit(request: Request) -> Response:
-    body = await request.json()
-    old_name = body.get("old_name", "").strip()
-    new_name = body.get("name", "").strip()
-    url = body.get("url", "").strip()
+    """Edit connection — accepts multipart (with cert upload) or JSON."""
+    content_type = request.headers.get("content-type", "")
+
+    if "multipart" in content_type:
+        form = await request.form()
+        old_name = form.get("old_name", "").strip()
+        new_name = form.get("name", "").strip()
+        url = form.get("url", "").strip()
+        auth_method = form.get("auth_method")
+        verify_ssl_str = form.get("verify_ssl")
+        readonly_str = form.get("readonly")
+    else:
+        form = await request.json()
+        old_name = form.get("old_name", "").strip()
+        new_name = form.get("name", "").strip()
+        url = form.get("url", "").strip()
+        auth_method = form.get("auth_method")
+        verify_ssl_str = form.get("verify_ssl")
+        readonly_str = form.get("readonly")
 
     if not old_name or not new_name or not url:
         return _json({"error": "old_name, name, and url are required"}, 400)
@@ -1053,23 +1136,73 @@ async def api_edit(request: Request) -> Response:
     old_conn = registry.get(old_name)
     old_conn_data = old_conn.to_dict() if old_conn else None
 
+    # Resolve new values, falling back to old connection data
+    resolved_auth = auth_method if auth_method is not None else (old_conn.auth_method if old_conn else "none")
+    if isinstance(verify_ssl_str, str):
+        resolved_verify = verify_ssl_str.lower() == "true"
+    elif isinstance(verify_ssl_str, bool):
+        resolved_verify = verify_ssl_str
+    else:
+        resolved_verify = old_conn.verify_ssl if old_conn else True
+    if isinstance(readonly_str, str):
+        resolved_readonly = readonly_str.lower() == "true"
+    elif isinstance(readonly_str, bool):
+        resolved_readonly = readonly_str
+    else:
+        resolved_readonly = old_conn.readonly if old_conn else True
+
+    # Handle cert file uploads (multipart only)
+    cert_path = old_conn.cert_path if old_conn else ""
+    cert_key_path = old_conn.cert_key_path if old_conn else ""
+    cert_password = old_conn.cert_password if old_conn else ""
+
+    if "multipart" in content_type:
+        cert_file = form.get("cert_file")
+        if cert_file and hasattr(cert_file, "read"):
+            cert_dir = os.path.join(CERTS_DIR, new_name)
+            os.makedirs(cert_dir, exist_ok=True)
+            dest = os.path.join(cert_dir, cert_file.filename)
+            with open(dest, "wb") as f:
+                f.write(await cert_file.read())
+            cert_path = f"{new_name}/{cert_file.filename}"
+
+        key_file = form.get("key_file")
+        if key_file and hasattr(key_file, "read"):
+            cert_dir = os.path.join(CERTS_DIR, new_name)
+            os.makedirs(cert_dir, exist_ok=True)
+            dest = os.path.join(cert_dir, key_file.filename)
+            with open(dest, "wb") as f:
+                f.write(await key_file.read())
+            cert_key_path = f"{new_name}/{key_file.filename}"
+
+        pw = form.get("cert_password")
+        if pw:
+            cert_password = pw
+
+    # For sensitive fields: use new value if provided, else keep old
+    def _resolve(key, old_val):
+        v = form.get(key) if isinstance(form, dict) else form.get(key, "")
+        if v and v != "***":
+            return v
+        return old_val
+
     registry.remove(old_name)
     client_manager.disconnect(old_name)
 
     conn = ConnectionInfo(
         name=new_name, url=url,
-        auth_method=body.get("auth_method", old_conn.auth_method if old_conn else "none"),
-        cert_path=old_conn.cert_path if old_conn else "",
-        cert_password=old_conn.cert_password if old_conn else "",
-        cert_key_path=old_conn.cert_key_path if old_conn else "",
-        knox_token=old_conn.knox_token if old_conn else "",
-        knox_cookie=old_conn.knox_cookie if old_conn else "",
-        knox_passcode=old_conn.knox_passcode if old_conn else "",
-        knox_user=old_conn.knox_user if old_conn else "",
-        knox_password=old_conn.knox_password if old_conn else "",
-        knox_gateway_url=old_conn.knox_gateway_url if old_conn else "",
-        verify_ssl=body.get("verify_ssl", old_conn.verify_ssl if old_conn else True),
-        readonly=body.get("readonly", old_conn.readonly if old_conn else True),
+        auth_method=resolved_auth,
+        cert_path=cert_path,
+        cert_password=cert_password,
+        cert_key_path=cert_key_path,
+        knox_token=_resolve("knox_token", old_conn.knox_token if old_conn else ""),
+        knox_cookie=_resolve("knox_cookie", old_conn.knox_cookie if old_conn else ""),
+        knox_passcode=_resolve("knox_passcode", old_conn.knox_passcode if old_conn else ""),
+        knox_user=_resolve("knox_user", old_conn.knox_user if old_conn else ""),
+        knox_password=_resolve("knox_password", old_conn.knox_password if old_conn else ""),
+        knox_gateway_url=_resolve("knox_gateway_url", old_conn.knox_gateway_url if old_conn else ""),
+        verify_ssl=resolved_verify,
+        readonly=resolved_readonly,
     )
     registry.add(conn)
     try:

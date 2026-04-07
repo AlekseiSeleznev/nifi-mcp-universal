@@ -23,6 +23,23 @@ class SessionState:
     last_access: float = field(default_factory=time.time)
 
 
+def _normalize_nifi_url(url: str) -> str:
+    """Normalize NiFi URL to always end with /nifi-api.
+
+    Users typically enter:
+      https://host:port
+      https://host:port/nifi
+      https://host:port/nifi-api
+    All should resolve to https://host:port/nifi-api
+    """
+    url = url.rstrip("/")
+    if url.endswith("/nifi-api"):
+        return url
+    if url.endswith("/nifi"):
+        return url[:-5] + "/nifi-api"
+    return url + "/nifi-api"
+
+
 def _build_client(conn: ConnectionInfo) -> NiFiClient:
     """Build a NiFiClient from ConnectionInfo."""
     cert_path_abs = ""
@@ -55,7 +72,7 @@ def _build_client(conn: ConnectionInfo) -> NiFiClient:
     )
     session = auth.build_session()
     return NiFiClient(
-        conn.url,
+        _normalize_nifi_url(conn.url),
         session,
         timeout_seconds=settings.http_timeout,
     )
