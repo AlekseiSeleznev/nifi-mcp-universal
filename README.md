@@ -38,7 +38,9 @@ MCP-шлюз для Apache NiFi. Подключает Claude Code / Cursor / VS 
 - **Read-only по умолчанию** — безопасный режим, write-операции требуют явного включения
 - **Двуязычный UI** — русский и английский
 
-## Quick Start
+## Быстрый старт
+
+### Linux / macOS
 
 ```bash
 git clone https://github.com/AlekseiSeleznev/nifi-mcp-universal.git
@@ -46,40 +48,61 @@ cd nifi-mcp-universal
 ./setup.sh
 ```
 
-The script will:
-1. Create `.env` with default settings (port 8085)
-2. Build and start the Docker container
-3. Register the MCP server in Claude Code
+### Windows
 
-After setup, open Claude Code and run `/mcp` to verify the connection.
+**Требуется** [Git for Windows](https://gitforwindows.org/) (включает Git Bash) или WSL2.
+
+```bash
+git clone https://github.com/AlekseiSeleznev/nifi-mcp-universal.git
+cd nifi-mcp-universal
+./setup.sh
+```
+
+### Что делает `setup.sh`
+
+1. Определяет ОС — на macOS/Windows автоматически создаёт `docker-compose.override.yml` с bridge-сетью (host mode не поддерживается Docker Desktop)
+2. Создаёт `.env` из `.env.example` (порт 8085)
+3. Собирает и запускает Docker-контейнер (`restart: always` — переживает перезагрузку)
+4. Ждёт healthcheck
+5. Регистрирует MCP-сервер в Claude Code через `claude mcp add`
+
+После установки откройте Claude Code и выполните `/mcp` для проверки.
 
 **Dashboard:** [http://localhost:8085/dashboard](http://localhost:8085/dashboard)
 
-### Windows
+### Ручная установка
+
+Если `setup.sh` не подходит:
 
 ```bash
 cp .env.example .env
-docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d
-```
+# Отредактируйте .env при необходимости
 
-### Manual setup
+# Linux:
+docker compose up -d --build
 
-```bash
-cp .env.example .env
-docker compose up -d
+# macOS / Windows:
+docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d --build
+
+# Регистрация в Claude Code:
+claude mcp add --transport http -s user nifi-universal http://localhost:8085/mcp
 ```
 
 ## Подключение к Claude Code
 
-Добавьте в `~/.claude/settings.json`:
+`setup.sh` регистрирует сервер автоматически. Если нужно вручную:
+
+```bash
+claude mcp add --transport http -s user nifi-universal http://localhost:8085/mcp
+```
+
+Или добавьте в `~/.claude.json` в секцию `mcpServers`:
 
 ```json
 {
-  "mcpServers": {
-    "nifi": {
-      "type": "http",
-      "url": "http://localhost:8085/mcp"
-    }
+  "nifi-universal": {
+    "type": "http",
+    "url": "http://localhost:8085/mcp"
   }
 }
 ```
