@@ -1,7 +1,10 @@
+# Windows/macOS override — bridge network + port mapping
+# Usage: cp docker-compose.windows.yml docker-compose.override.yml
+# Or run: docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d
 services:
   gateway:
     network_mode: bridge
     ports:
-      - "8080:8080"
+      - "${NIFI_MCP_PORT:-8085}:${NIFI_MCP_PORT:-8085}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
