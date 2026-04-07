@@ -12,7 +12,7 @@ services:
       - ./.env:/app/.env:ro
     env_file:
       - .env
-    restart: unless-stopped
+    restart: always
 
 volumes:
   gw-data:

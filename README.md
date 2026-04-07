@@ -2,7 +2,7 @@
 
 MCP-шлюз для Apache NiFi. Подключает Claude Code / Cursor / VS Code к нескольким NiFi инстансам одновременно через [Model Context Protocol](https://modelcontextprotocol.io/).
 
-Один адрес `http://localhost:8080/mcp` вместо ручной настройки. Шлюз принимает запросы от AI и маршрутизирует их к нужному NiFi. Каждый сеанс AI-ассистента работает со своим активным подключением независимо (per-session routing).
+Один адрес `http://localhost:8085/mcp` вместо ручной настройки. Шлюз принимает запросы от AI и маршрутизирует их к нужному NiFi. Каждый сеанс AI-ассистента работает со своим активным подключением независимо (per-session routing).
 
 ---
 
@@ -38,23 +38,35 @@ MCP-шлюз для Apache NiFi. Подключает Claude Code / Cursor / VS 
 - **Read-only по умолчанию** — безопасный режим, write-операции требуют явного включения
 - **Двуязычный UI** — русский и английский
 
-## Быстрый старт
-
-### Docker (рекомендуется)
+## Quick Start
 
 ```bash
 git clone https://github.com/AlekseiSeleznev/nifi-mcp-universal.git
 cd nifi-mcp-universal
-cp .env.example .env
-docker compose up -d
+./setup.sh
 ```
 
-Dashboard: http://localhost:8080/dashboard
+The script will:
+1. Create `.env` with default settings (port 8085)
+2. Build and start the Docker container
+3. Register the MCP server in Claude Code
+
+After setup, open Claude Code and run `/mcp` to verify the connection.
+
+**Dashboard:** [http://localhost:8085/dashboard](http://localhost:8085/dashboard)
 
 ### Windows
 
 ```bash
+cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d
+```
+
+### Manual setup
+
+```bash
+cp .env.example .env
+docker compose up -d
 ```
 
 ## Подключение к Claude Code
@@ -66,7 +78,7 @@ docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d
   "mcpServers": {
     "nifi": {
       "type": "http",
-      "url": "http://localhost:8080/mcp"
+      "url": "http://localhost:8085/mcp"
     }
   }
 }
@@ -132,7 +144,7 @@ docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d
 
 ## Dashboard
 
-Веб-интерфейс для управления подключениями: `http://localhost:8080/dashboard`
+Веб-интерфейс для управления подключениями: `http://localhost:8085/dashboard`
 
 - Подключение/отключение NiFi инстансов через форму
 - Загрузка сертификатов (P12, PEM) через dashboard
@@ -175,7 +187,7 @@ docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d
 
 | Переменная | По умолчанию | Описание |
 |-----------|-------------|----------|
-| `NIFI_MCP_PORT` | `8080` | Порт сервера |
+| `NIFI_MCP_PORT` | `8085` | Порт сервера |
 | `NIFI_MCP_LOG_LEVEL` | `INFO` | Уровень логирования |
 | `NIFI_MCP_API_KEY` | — | Bearer token для MCP endpoint |
 | `NIFI_MCP_NIFI_API_BASE` | — | URL NiFi для авто-подключения при старте |
