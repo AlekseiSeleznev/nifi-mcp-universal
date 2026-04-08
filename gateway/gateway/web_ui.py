@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import html as _html
 import json
 import logging
 import os
+import re
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
@@ -13,6 +15,28 @@ from gateway.nifi_registry import ConnectionInfo, registry
 from gateway.nifi_client_manager import client_manager, _build_client, CERTS_DIR
 
 log = logging.getLogger(__name__)
+
+# Connection name: letters, digits, hyphens, underscores only
+_CONN_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$")
+
+
+def _esc(value: str) -> str:
+    """Escape a string for safe embedding in HTML."""
+    return _html.escape(str(value), quote=True)
+
+
+def _esc_js(value: str) -> str:
+    """Escape a string for safe embedding inside JS single-quoted strings."""
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("'", "\\'")
+        .replace('"', '\\"')
+        .replace("<", "\\x3c")
+        .replace(">", "\\x3e")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+    )
 
 
 def _json(data, status_code: int = 200) -> Response:
@@ -387,6 +411,16 @@ async function api(url, opts) {
   } catch(e) { toast(T.msg_error + ': ' + e.message, true); return null; }
 }
 
+/* ═══ XSS PROTECTION ═══ */
+function escHtml(s) {
+  var d = document.createElement('div');
+  d.appendChild(document.createTextNode(s || ''));
+  return d.innerHTML;
+}
+function escAttr(s) {
+  return escHtml(s).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+}
+
 function toggleAuth(prefix) {
   prefix = prefix || 'f';
   var sel = document.getElementById(prefix === 'f' ? 'f-auth' : 'e-auth');
@@ -421,27 +455,30 @@ async function loadConns() {
 
   list.innerHTML = conns.map(function(c) {
     var isDefault = c.name === activeConn;
+    var eName = escHtml(c.name);
+    var eUrl = escHtml(c.url);
+    var eNameAttr = escAttr(c.name);
     return '<div class="db-item">' +
       '<div class="db-row">' +
         '<div class="dot ' + (c.connected ? 'ok' : 'err') + '"></div>' +
         '<div class="db-info">' +
-          '<div class="db-name">' + c.name + '</div>' +
-          '<div class="db-details">' + c.url + '</div>' +
+          '<div class="db-name">' + eName + '</div>' +
+          '<div class="db-details">' + eUrl + '</div>' +
           '<div class="db-badges">' +
             '<span class="badge ' + (c.connected ? 'badge-g' : 'badge-r') + '">' +
               (c.connected ? T.connected : T.disconnected) + '</span>' +
-            (c.nifi_version ? '<span class="badge badge-b">NiFi ' + c.nifi_version + '</span>' : '') +
+            (c.nifi_version ? '<span class="badge badge-b">NiFi ' + escHtml(c.nifi_version) + '</span>' : '') +
             '<span class="badge badge-c">' + (c.readonly ? T.ro : T.rw) + '</span>' +
           '</div>' +
         '</div>' +
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">' +
-          '<div class="rd" onclick="setDefault(\'' + c.name + '\')">' +
+          '<div class="rd" onclick="setDefault(\'' + eNameAttr + '\')">' +
             '<div class="rb ' + (isDefault ? 'on' : '') + '"></div>' +
             '<span>' + T.default_conn + '</span>' +
           '</div>' +
           '<div class="db-actions">' +
-            '<button class="btn" onclick="editConn(\'' + c.name + '\')">' + T.btn_edit + '</button>' +
-            '<button class="btn btn-d" onclick="confirmDelete(\'' + c.name + '\')">' + T.btn_delete + '</button>' +
+            '<button class="btn" onclick="editConn(\'' + eNameAttr + '\')">' + T.btn_edit + '</button>' +
+            '<button class="btn btn-d" onclick="confirmDelete(\'' + eNameAttr + '\')">' + T.btn_delete + '</button>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -533,46 +570,46 @@ async function editConn(name) {
     '<div class="modal">' +
       '<h3>' + T.h_edit_conn + '</h3>' +
       '<div class="form-grid">' +
-        '<div class="form-group"><label>' + T.conn_name + '</label><input id="e-name" value="' + c.name + '"></div>' +
-        '<div class="form-group"><label>' + T.nifi_url + '</label><input id="e-url" value="' + c.url + '"></div>' +
+        '<div class="form-group"><label>' + T.conn_name + '</label><input id="e-name" value="' + escAttr(c.name) + '"></div>' +
+        '<div class="form-group"><label>' + T.nifi_url + '</label><input id="e-url" value="' + escAttr(c.url) + '"></div>' +
         '<div class="form-group full"><label>' + T.auth_method + '</label><select id="e-auth" onchange="toggleAuth(\'e\')">' +
           AUTH_METHODS.map(function(m){ return '<option value="'+m+'"'+(c.auth_method===m?' selected':'')+'>'+authLabel(m)+'</option>'; }).join('') +
         '</select></div>' +
         /* P12 */
         '<div class="auth-fields" id="eaf-certificate_p12">' +
-          '<div class="form-group"><label>' + T.certificate + '</label><input id="e-cert" type="file" accept=".p12,.pfx">' + (c.cert_path ? '<span style="font-size:.7rem;color:#64748b;margin-top:2px">' + c.cert_path + '</span>' : '') + '</div>' +
+          '<div class="form-group"><label>' + T.certificate + '</label><input id="e-cert" type="file" accept=".p12,.pfx">' + (c.cert_path ? '<span style="font-size:.7rem;color:#64748b;margin-top:2px">' + escHtml(c.cert_path) + '</span>' : '') + '</div>' +
           '<div class="form-group"><label>' + T.cert_password + '</label><input id="e-certpw" type="password" placeholder="' + (c.cert_password === '***' ? '••••••' : '') + '"></div>' +
         '</div>' +
         /* PEM */
         '<div class="auth-fields" id="eaf-certificate_pem">' +
-          '<div class="form-group"><label>' + T.certificate + ' (.pem/.crt)</label><input id="e-pemcert" type="file" accept=".pem,.crt">' + (c.cert_path ? '<span style="font-size:.7rem;color:#64748b;margin-top:2px">' + c.cert_path + '</span>' : '') + '</div>' +
-          '<div class="form-group"><label>' + T.cert_key + '</label><input id="e-pemkey" type="file" accept=".key,.pem">' + (c.cert_key_path ? '<span style="font-size:.7rem;color:#64748b;margin-top:2px">' + c.cert_key_path + '</span>' : '') + '</div>' +
+          '<div class="form-group"><label>' + T.certificate + ' (.pem/.crt)</label><input id="e-pemcert" type="file" accept=".pem,.crt">' + (c.cert_path ? '<span style="font-size:.7rem;color:#64748b;margin-top:2px">' + escHtml(c.cert_path) + '</span>' : '') + '</div>' +
+          '<div class="form-group"><label>' + T.cert_key + '</label><input id="e-pemkey" type="file" accept=".key,.pem">' + (c.cert_key_path ? '<span style="font-size:.7rem;color:#64748b;margin-top:2px">' + escHtml(c.cert_key_path) + '</span>' : '') + '</div>' +
         '</div>' +
         /* Knox Token */
         '<div class="auth-fields" id="eaf-knox_token">' +
-          '<div class="form-group full"><label>' + T.knox_token + '</label><textarea id="e-ktoken" rows="2">' + (c.knox_token !== '***' ? (c.knox_token||'') : '') + '</textarea></div>' +
+          '<div class="form-group full"><label>' + T.knox_token + '</label><textarea id="e-ktoken" rows="2">' + (c.knox_token !== '***' ? escHtml(c.knox_token||'') : '') + '</textarea></div>' +
         '</div>' +
         /* Knox Cookie */
         '<div class="auth-fields" id="eaf-knox_cookie">' +
-          '<div class="form-group full"><label>' + T.knox_cookie + '</label><textarea id="e-kcookie" rows="2">' + (c.knox_cookie !== '***' ? (c.knox_cookie||'') : '') + '</textarea></div>' +
+          '<div class="form-group full"><label>' + T.knox_cookie + '</label><textarea id="e-kcookie" rows="2">' + (c.knox_cookie !== '***' ? escHtml(c.knox_cookie||'') : '') + '</textarea></div>' +
         '</div>' +
         /* Knox Passcode */
         '<div class="auth-fields" id="eaf-knox_passcode">' +
-          '<div class="form-group"><label>' + T.knox_passcode + '</label><textarea id="e-kpass" rows="2">' + (c.knox_passcode !== '***' ? (c.knox_passcode||'') : '') + '</textarea></div>' +
-          '<div class="form-group"><label>' + T.knox_gateway_url + '</label><input id="e-kgw1" value="' + (c.knox_gateway_url||'') + '"></div>' +
+          '<div class="form-group"><label>' + T.knox_passcode + '</label><textarea id="e-kpass" rows="2">' + (c.knox_passcode !== '***' ? escHtml(c.knox_passcode||'') : '') + '</textarea></div>' +
+          '<div class="form-group"><label>' + T.knox_gateway_url + '</label><input id="e-kgw1" value="' + escAttr(c.knox_gateway_url||'') + '"></div>' +
         '</div>' +
         /* Basic */
         '<div class="auth-fields" id="eaf-basic">' +
-          '<div class="form-group"><label>' + T.knox_user + '</label><input id="e-user" value="' + (c.knox_user||'') + '"></div>' +
+          '<div class="form-group"><label>' + T.knox_user + '</label><input id="e-user" value="' + escAttr(c.knox_user||'') + '"></div>' +
           '<div class="form-group"><label>' + T.knox_password + '</label><input id="e-pass" type="password" placeholder="' + (c.knox_password === '***' ? '••••••' : '') + '"></div>' +
-          '<div class="form-group full"><label>' + T.knox_gateway_url + '</label><input id="e-kgw2" value="' + (c.knox_gateway_url||'') + '"></div>' +
+          '<div class="form-group full"><label>' + T.knox_gateway_url + '</label><input id="e-kgw2" value="' + escAttr(c.knox_gateway_url||'') + '"></div>' +
         '</div>' +
         '<div class="form-group" style="margin-top:2px"><label class="toggle"><input type="checkbox" id="e-ssl" '+(c.verify_ssl?'checked':'')+'><span class="toggle-track"></span>' + T.verify_ssl + '</label></div>' +
         '<div class="form-group" style="margin-top:2px"><label class="toggle"><input type="checkbox" id="e-aw" '+(!c.readonly?'checked':'')+'><span class="toggle-track"></span>' + T.allow_write + '</label></div>' +
       '</div>' +
       '<div class="modal-actions">' +
         '<button class="btn" onclick="this.closest(\'.overlay\').remove()">' + T.btn_cancel + '</button>' +
-        '<button class="btn" onclick="saveEdit(\'' + name + '\')">' + T.btn_save + '</button>' +
+        '<button class="btn" onclick="saveEdit(\'' + escAttr(name) + '\')">' + T.btn_save + '</button>' +
       '</div>' +
     '</div>';
 
@@ -642,11 +679,11 @@ function confirmDelete(name) {
   ov.className = 'overlay';
   ov.innerHTML =
     '<div class="modal" style="width:360px;text-align:center">' +
-      '<h3>' + T.confirm_delete + ' "' + name + '"?</h3>' +
+      '<h3>' + T.confirm_delete + ' "' + escHtml(name) + '"?</h3>' +
       '<p style="color:#94a3b8;font-size:.82rem;margin-bottom:14px">' + T.confirm_delete_text + '</p>' +
       '<div style="display:flex;gap:6px;justify-content:center">' +
         '<button class="btn" onclick="this.closest(\'.overlay\').remove()">' + T.btn_cancel + '</button>' +
-        '<button class="btn btn-ds" onclick="doDelete(\'' + name + '\')">' + T.btn_delete + '</button>' +
+        '<button class="btn btn-ds" onclick="doDelete(\'' + escAttr(name) + '\')">' + T.btn_delete + '</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(ov);
@@ -1034,24 +1071,26 @@ async def api_connect(request: Request) -> Response:
         cert_path = ""
         cert_key_path = ""
 
-        # Handle cert file upload
+        # Handle cert file upload (sanitize filename to prevent path traversal)
         cert_file = form.get("cert_file")
         if cert_file and hasattr(cert_file, "read"):
+            safe_filename = os.path.basename(cert_file.filename or "cert")
             cert_dir = os.path.join(CERTS_DIR, name)
             os.makedirs(cert_dir, exist_ok=True)
-            dest = os.path.join(cert_dir, cert_file.filename)
+            dest = os.path.join(cert_dir, safe_filename)
             with open(dest, "wb") as f:
                 f.write(await cert_file.read())
-            cert_path = f"{name}/{cert_file.filename}"
+            cert_path = f"{name}/{safe_filename}"
 
         key_file = form.get("key_file")
         if key_file and hasattr(key_file, "read"):
+            safe_key_filename = os.path.basename(key_file.filename or "key")
             cert_dir = os.path.join(CERTS_DIR, name)
             os.makedirs(cert_dir, exist_ok=True)
-            dest = os.path.join(cert_dir, key_file.filename)
+            dest = os.path.join(cert_dir, safe_key_filename)
             with open(dest, "wb") as f:
                 f.write(await key_file.read())
-            cert_key_path = f"{name}/{key_file.filename}"
+            cert_key_path = f"{name}/{safe_key_filename}"
 
         conn = ConnectionInfo(
             name=name, url=url, auth_method=auth_method,
@@ -1084,6 +1123,9 @@ async def api_connect(request: Request) -> Response:
 
     if not name or not url:
         return _json({"error": "name and url are required"}, 400)
+
+    if not _CONN_NAME_RE.match(name):
+        return _json({"error": "Invalid connection name. Use only letters, digits, hyphens, underscores (max 63 chars)."}, 400)
 
     registry.add(conn)
     try:
@@ -1130,6 +1172,9 @@ async def api_edit(request: Request) -> Response:
     if not old_name or not new_name or not url:
         return _json({"error": "old_name, name, and url are required"}, 400)
 
+    if not _CONN_NAME_RE.match(new_name):
+        return _json({"error": "Invalid connection name. Use only letters, digits, hyphens, underscores (max 63 chars)."}, 400)
+
     was_default = registry.active == old_name
     saved_default = registry.active
 
@@ -1159,21 +1204,23 @@ async def api_edit(request: Request) -> Response:
     if "multipart" in content_type:
         cert_file = form.get("cert_file")
         if cert_file and hasattr(cert_file, "read"):
+            safe_filename = os.path.basename(cert_file.filename or "cert")
             cert_dir = os.path.join(CERTS_DIR, new_name)
             os.makedirs(cert_dir, exist_ok=True)
-            dest = os.path.join(cert_dir, cert_file.filename)
+            dest = os.path.join(cert_dir, safe_filename)
             with open(dest, "wb") as f:
                 f.write(await cert_file.read())
-            cert_path = f"{new_name}/{cert_file.filename}"
+            cert_path = f"{new_name}/{safe_filename}"
 
         key_file = form.get("key_file")
         if key_file and hasattr(key_file, "read"):
+            safe_key_filename = os.path.basename(key_file.filename or "key")
             cert_dir = os.path.join(CERTS_DIR, new_name)
             os.makedirs(cert_dir, exist_ok=True)
-            dest = os.path.join(cert_dir, key_file.filename)
+            dest = os.path.join(cert_dir, safe_key_filename)
             with open(dest, "wb") as f:
                 f.write(await key_file.read())
-            cert_key_path = f"{new_name}/{key_file.filename}"
+            cert_key_path = f"{new_name}/{safe_key_filename}"
 
         pw = form.get("cert_password")
         if pw:
