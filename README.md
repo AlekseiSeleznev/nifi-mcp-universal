@@ -32,7 +32,7 @@ MCP-шлюз для Apache NiFi. Подключает Claude Code / Cursor / VS 
 
 - **Multi-NiFi** — подключение к нескольким NiFi инстансам одновременно с переключением через MCP tools или Dashboard
 - **Per-session routing** — каждая сессия Claude Code может работать со своим NiFi
-- **72 MCP tools** — управление подключениями, процессоры, соединения, controller services, process groups, порты, parameter contexts, best practices
+- **66 MCP tools** — управление подключениями, процессоры, соединения, controller services, process groups, порты, parameter contexts, best practices
 - **Dashboard** — веб-интерфейс для управления подключениями с загрузкой сертификатов (`/dashboard`)
 - **Docker** — запуск одной командой
 - **Кроссплатформенность** — Linux и Windows (через docker-compose override)
@@ -236,7 +236,7 @@ claude mcp add --transport http -s user nifi-universal http://localhost:8085/mcp
 | `get_best_practices_guide` | Руководство по лучшим практикам |
 | `get_recommended_workflow` | Рекомендуемый пошаговый workflow |
 
-### Операции записи (41)
+### Операции записи (35)
 | Категория | Tools |
 |-----------|-------|
 | Процессоры (8) | `start_processor`, `stop_processor`, `create_processor`, `update_processor_config`, `delete_processor`, `terminate_processor`, `start_all_processors_in_group`, `stop_all_processors_in_group` |
@@ -343,8 +343,8 @@ nifi-mcp-universal/
 │   │   │   └── best_practices.py
 │   │   └── tools/
 │   │       ├── admin.py         # connect/disconnect/switch
-│   │       ├── read_tools.py    # 24 read-only tools
-│   │       └── write_tools.py   # 42 write tools
+│   │       ├── read_tools.py    # 25 read-only tools
+│   │       └── write_tools.py   # 35 write tools
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── docker-compose.yml
@@ -389,7 +389,7 @@ python3 -m pytest tests/test_nifi_client.py -v
 | `test_nifi_auth.py` | KnoxAuthFactory — все методы аутентификации |
 | `test_tools_admin.py` | connect_nifi, disconnect_nifi, switch_nifi, list/status/test |
 | `test_tools_read.py` | 25 read-only MCP tools, redact sensitive, error handling |
-| `test_tools_write.py` | 42 write MCP tools, readonly guard, tool dispatch |
+| `test_tools_write.py` | 35 write MCP tools, readonly guard, tool dispatch |
 | `test_mcp_server.py` | list_tools, call_tool dispatch, error handling |
 | `test_server.py` | /health endpoint, OAuth endpoints, auth detection |
 | `test_best_practices.py` | NiFiBestPractices, analyze_flow_request, SetupGuide |
