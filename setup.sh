@@ -16,9 +16,53 @@ CONTAINER="nifi-mcp-gateway"
 # ── Helpers ──────────────────────────────────────────────────────
 env_val() { grep "^$1=" "$2" 2>/dev/null | head -1 | cut -d= -f2-; }
 
+ok()   { echo "[+] $*"; }
+info() { echo "[i] $*"; }
+warn() { echo "[!] $*"; }
+fail() { echo "[ERROR] $*" >&2; exit 1; }
+
 # ── 1. Prerequisites ─────────────────────────────────────────────
-command -v docker >/dev/null 2>&1 || { echo "ERROR: Docker not found. Install: https://docs.docker.com/get-docker/"; exit 1; }
-docker compose version >/dev/null 2>&1 || { echo "ERROR: Docker Compose V2 not found."; exit 1; }
+echo ""
+echo "=== Checking prerequisites ==="
+
+# Docker binary
+if command -v docker >/dev/null 2>&1; then
+  ok "docker found: $(docker --version 2>/dev/null | head -1)"
+else
+  fail "Docker not found. Install Docker Engine: https://docs.docker.com/get-docker/"
+fi
+
+# Docker daemon running
+if ! docker info >/dev/null 2>&1; then
+  fail "Docker daemon is not running. Start Docker and try again.
+  Linux:  sudo systemctl start docker
+  macOS:  open Docker Desktop
+  Windows: start Docker Desktop"
+fi
+ok "Docker daemon is running"
+
+# Docker Compose v2 (plugin, not standalone docker-compose)
+if docker compose version >/dev/null 2>&1; then
+  ok "docker compose v2 found: $(docker compose version 2>/dev/null | head -1)"
+else
+  fail "Docker Compose v2 not found. Install the Compose plugin:
+  https://docs.docker.com/compose/install/
+  NOTE: This setup requires 'docker compose' (v2), not 'docker-compose' (v1)."
+fi
+
+# Claude CLI
+if command -v claude >/dev/null 2>&1; then
+  ok "claude CLI found: $(claude --version 2>/dev/null | head -1 || echo 'version unknown')"
+  CLAUDE_FOUND=1
+else
+  warn "Claude Code CLI not found. MCP will NOT be registered automatically."
+  warn "Install Claude Code: https://claude.ai/download"
+  warn "After installing, run manually:"
+  warn "  claude mcp add --transport http -s user ${NAME} http://localhost:${DEFAULT_PORT}/mcp"
+  CLAUDE_FOUND=0
+fi
+
+echo ""
 
 # ── 2. Detect OS ────────────────────────────────────────────────
 OS="linux"
@@ -39,33 +83,59 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 EOF
-  echo "[+] Created docker-compose.override.yml for ${OS}"
+  ok "Created docker-compose.override.yml for ${OS}"
 fi
 
 # ── 3. Create .env ──────────────────────────────────────────────
 if [ ! -f .env ]; then
   cp .env.example .env
-  echo "[+] Created .env from .env.example (port ${DEFAULT_PORT})"
+  ok "Created .env from .env.example (port ${DEFAULT_PORT})"
 else
-  echo "[i] .env already exists, keeping it"
+  info ".env already exists, keeping it"
 fi
 
 PORT=$(env_val "$ENV_PORT_KEY" .env 2>/dev/null || true)
 PORT=${PORT:-$DEFAULT_PORT}
 
-# ── 4. Build & start ───────────────────────────────────────────
-echo "[*] Building and starting container..."
-docker compose up -d --build --remove-orphans
+# ── 4. Check port availability ──────────────────────────────────
+if command -v ss >/dev/null 2>&1; then
+  PORT_IN_USE=$(ss -tlnp "sport = :${PORT}" 2>/dev/null | grep -c ":${PORT}" || true)
+elif command -v lsof >/dev/null 2>&1; then
+  PORT_IN_USE=$(lsof -ti ":${PORT}" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
+else
+  PORT_IN_USE=0
+fi
 
-# ── 5. Health check ─────────────────────────────────────────────
-echo "[*] Waiting for gateway to be healthy..."
+if [ "${PORT_IN_USE}" -gt 0 ]; then
+  warn "Port ${PORT} appears to be in use by another process."
+  warn "If it's the old container, it will be replaced. Otherwise check what's using port ${PORT}."
+  printf "Continue anyway? [y/N] "
+  read -r REPLY
+  case "$REPLY" in
+    [yY]|[yY][eE][sS]) info "Continuing..." ;;
+    *) fail "Aborted. To use a different port, edit NIFI_MCP_PORT in .env and re-run." ;;
+  esac
+fi
+
+# ── 5. Build & start ───────────────────────────────────────────
+echo ""
+echo "=== Building and starting container ==="
+info "Using port ${PORT} (restart: always — survives reboot)"
+docker compose up -d --build --remove-orphans
+ok "Container started"
+
+# ── 6. Health check ─────────────────────────────────────────────
+echo ""
+echo "=== Waiting for gateway to be healthy ==="
 HEALTHY=0
 for i in $(seq 1 30); do
   if curl -sf "http://localhost:${PORT}/health" >/dev/null 2>&1; then
     HEALTHY=1; break
   fi
+  printf "."
   sleep 1
 done
+[ "$HEALTHY" -eq 0 ] && echo ""
 
 if [ "$HEALTHY" -eq 0 ]; then
   # Fallback: check docker health (curl may be absent on Windows)
@@ -74,24 +144,59 @@ if [ "$HEALTHY" -eq 0 ]; then
 fi
 
 if [ "$HEALTHY" -eq 1 ]; then
-  echo "[+] Gateway is healthy on port ${PORT}"
+  echo ""
+  HEALTH_RESPONSE=$(curl -s "http://localhost:${PORT}/health" 2>/dev/null || echo "{}")
+  ok "Gateway is healthy on port ${PORT}"
+  info "Health: ${HEALTH_RESPONSE}"
 else
-  echo "[!] Gateway not healthy after 30s. Check: docker logs ${CONTAINER}"
+  echo ""
+  warn "Gateway not healthy after 30s."
+  warn "Check logs: docker compose logs ${CONTAINER}"
+  warn "Check port: docker ps"
   exit 1
 fi
 
-# ── 6. Register in Claude Code ──────────────────────────────────
-if command -v claude >/dev/null 2>&1; then
+# ── 7. Register in Claude Code ──────────────────────────────────
+echo ""
+echo "=== Registering MCP server ==="
+
+if [ "$CLAUDE_FOUND" -eq 1 ]; then
+  # Idempotent: remove old registration first (ignore errors)
   claude mcp remove "$NAME" -s user 2>/dev/null || true
+  # Register with user scope so it works in ALL sessions after reboot
   claude mcp add --transport http -s user "$NAME" "http://localhost:${PORT}/mcp"
-  echo "[+] Registered '${NAME}' in Claude Code (user scope)"
+  ok "Registered '${NAME}' in Claude Code (scope: user — all sessions)"
+
   echo ""
-  echo "Done! Run 'claude' and use /mcp to verify."
+  echo "=== Verifying registration ==="
+  if claude mcp list 2>/dev/null | grep -q "$NAME"; then
+    ok "'${NAME}' is present in 'claude mcp list'"
+  else
+    warn "'${NAME}' not found in 'claude mcp list' — check manually: claude mcp list"
+  fi
 else
-  echo ""
-  echo "[i] Claude Code CLI not found. Register manually:"
-  echo "    claude mcp add --transport http -s user ${NAME} http://localhost:${PORT}/mcp"
+  warn "Claude CLI not found — skipping MCP registration."
+  warn "After installing Claude Code, run:"
+  warn "  claude mcp add --transport http -s user ${NAME} http://localhost:${PORT}/mcp"
 fi
 
+# ── 8. Final summary ────────────────────────────────────────────
 echo ""
-echo "Dashboard: http://localhost:${PORT}/dashboard"
+echo "============================================"
+echo " nifi-mcp-universal is ready!"
+echo "============================================"
+echo ""
+echo "  Dashboard:  http://localhost:${PORT}/dashboard"
+echo "  Health:     http://localhost:${PORT}/health"
+echo "  MCP URL:    http://localhost:${PORT}/mcp"
+echo ""
+echo "Next steps:"
+echo "  1. Open Claude Code and run /mcp to verify the server is listed"
+echo "  2. Open the Dashboard to add your first NiFi connection"
+echo "  3. Or use MCP tool directly:"
+echo "       connect_nifi(name=\"prod\", url=\"https://nifi.example.com:8443\","
+echo "                    auth_method=\"basic\", username=\"admin\", password=\"...\")"
+echo ""
+echo "After reboot: container auto-starts (restart: always)."
+echo "             MCP stays registered (user scope)."
+echo ""

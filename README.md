@@ -9,7 +9,9 @@ MCP-шлюз для Apache NiFi. Подключает Claude Code / Cursor / VS 
 ## Оглавление
 
 - [Возможности](#возможности)
+- [Требования](#требования)
 - [Быстрый старт](#быстрый-старт)
+- [После установки — первые шаги](#после-установки--первые-шаги)
 - [Подключение к Claude Code](#подключение-к-claude-code)
 - [MCP Tools](#mcp-tools)
 - [Dashboard](#dashboard)
@@ -20,6 +22,7 @@ MCP-шлюз для Apache NiFi. Подключает Claude Code / Cursor / VS 
 - [Совместимость](#совместимость)
 - [Архитектура](#архитектура)
 - [Стек](#стек)
+- [Troubleshooting](#troubleshooting)
 - [Благодарности](#благодарности)
 - [Лицензия](#лицензия)
 
@@ -37,6 +40,19 @@ MCP-шлюз для Apache NiFi. Подключает Claude Code / Cursor / VS 
 - **NiFi 1.x и 2.x** — автоматическое определение версии
 - **Read-only по умолчанию** — безопасный режим, write-операции требуют явного включения
 - **Двуязычный UI** — русский и английский
+
+## Требования
+
+| Компонент | Минимальная версия | Установка |
+|-----------|-------------------|-----------|
+| **Docker Engine** | 24+ | [docs.docker.com/get-docker](https://docs.docker.com/get-docker/) |
+| **Docker Compose** | v2 (плагин) | [docs.docker.com/compose/install](https://docs.docker.com/compose/install/) |
+| **Claude Code CLI** | любая | [claude.ai/download](https://claude.ai/download) |
+| **ОС** | Linux, macOS, Windows (Git Bash или WSL2) | — |
+
+> **Важно:** требуется именно `docker compose` (v2, встроенный плагин), а не устаревший `docker-compose` (v1). Проверить: `docker compose version`.
+
+---
 
 ## Быстрый старт
 
@@ -87,6 +103,72 @@ docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d --build
 # Регистрация в Claude Code:
 claude mcp add --transport http -s user nifi-universal http://localhost:8085/mcp
 ```
+
+## После установки — первые шаги
+
+### 1. Проверить MCP в Claude Code
+
+Откройте Claude Code и выполните:
+
+```
+/mcp
+```
+
+В списке должен появиться `nifi-universal`. Если его нет — см. раздел [Troubleshooting](#troubleshooting).
+
+### 2. Открыть Dashboard
+
+Перейдите по адресу: [http://localhost:8085/dashboard](http://localhost:8085/dashboard)
+
+### 3. Добавить первое подключение к NiFi
+
+**Вариант А — через Dashboard:**
+
+1. Откройте [http://localhost:8085/dashboard](http://localhost:8085/dashboard)
+2. Нажмите кнопку **"Добавить подключение"**
+3. Введите имя, URL NiFi и выберите метод аутентификации
+4. Нажмите **"Подключить"**
+
+**Вариант Б — через MCP tool в Claude Code:**
+
+```
+connect_nifi(
+  name="prod",
+  url="https://nifi.example.com:8443",
+  auth_method="basic",
+  username="admin",
+  password="secret"
+)
+```
+
+Методы аутентификации: `basic`, `certificate_p12`, `certificate_pem`, `knox_jwt`, `knox_cookie`, `knox_passcode`, `no_auth`.
+
+### 4. Переключаться между инстансами NiFi
+
+```
+switch_nifi(name="staging")
+```
+
+или через Dashboard — кнопка **"Активировать"** напротив нужного подключения.
+
+### 5. Включить write-режим
+
+По умолчанию все подключения работают в **read-only** режиме (безопасно).  
+Чтобы разрешить изменения, при подключении передайте `readonly=false`:
+
+```
+connect_nifi(name="dev", url="http://localhost:8080", auth_method="no_auth", readonly=false)
+```
+
+или через Dashboard — снимите флажок **"Только чтение"** при создании подключения.
+
+### Гарантия работы после перезагрузки
+
+- Контейнер настроен с `restart: always` — автоматически стартует при запуске Docker
+- MCP зарегистрирован с `scope: user` — работает во **всех** сеансах Claude Code без повторной настройки
+- После перезагрузки Docker должен быть запущен (`sudo systemctl enable docker` на Linux)
+
+---
 
 ## Подключение к Claude Code
 
@@ -324,6 +406,103 @@ pip install pytest pytest-asyncio
 - **Python 3.12** + requests + Starlette + uvicorn
 - **MCP SDK** >= 1.9.0 (Streamable HTTP transport)
 - **Docker** — single container, ~150 MB
+
+## Troubleshooting
+
+### MCP не появляется в `/mcp`
+
+```bash
+# Проверить, запущен ли контейнер
+docker ps | grep nifi-mcp
+
+# Проверить health endpoint
+curl http://localhost:8085/health
+
+# Просмотреть логи контейнера
+docker compose logs nifi-mcp-gateway
+
+# Проверить список MCP серверов в Claude Code
+claude mcp list
+
+# Перерегистрировать вручную
+claude mcp remove nifi-universal -s user 2>/dev/null || true
+claude mcp add --transport http -s user nifi-universal http://localhost:8085/mcp
+```
+
+### Ошибка подключения к NiFi
+
+- Проверьте URL (включая порт): `https://nifi.example.com:8443` или `http://nifi.example.com:8080`
+- Проверьте метод аутентификации — он должен совпадать с настройкой NiFi
+- Проверьте доступность NiFi: `curl -k https://nifi.example.com:8443/nifi-api/system-diagnostics`
+
+### SSL certificate error
+
+Если NiFi использует самоподписанный сертификат:
+
+```
+connect_nifi(
+  name="dev",
+  url="https://nifi.internal:8443",
+  auth_method="basic",
+  username="admin",
+  password="secret",
+  verify_ssl=false
+)
+```
+
+Или передайте CA-сертификат через Dashboard (поле "CA Certificate").
+
+### Контейнер не стартует
+
+```bash
+# Посмотреть логи
+docker compose logs
+
+# Посмотреть статус
+docker ps -a | grep nifi-mcp
+
+# Пересобрать и перезапустить
+docker compose down && docker compose up -d --build
+```
+
+### После перезагрузки не работает
+
+```bash
+# Убедиться, что контейнер запущен
+docker ps | grep nifi-mcp
+
+# Если не запущен — запустить вручную
+docker compose up -d
+
+# На Linux — включить автозапуск Docker
+sudo systemctl enable docker
+```
+
+### Порт 8085 занят
+
+Откройте `.env` и измените порт:
+
+```bash
+# .env
+NIFI_MCP_PORT=8086
+```
+
+Затем перезапустите:
+
+```bash
+docker compose down
+./setup.sh
+```
+
+### Зависла очередь flowfiles
+
+```
+empty_connection_queue(connection_id="...")
+```
+
+> Write-операции (`empty_connection_queue`, `start_processor` и др.) доступны только если подключение создано с `readonly=false`.
+
+---
 
 ## Благодарности
 
