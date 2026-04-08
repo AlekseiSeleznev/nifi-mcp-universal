@@ -270,6 +270,55 @@ nifi-mcp-universal/
 └── README.md
 ```
 
+## Тестирование
+
+Тесты расположены в `gateway/tests/` и покрывают всю кодовую базу без обращений к реальному NiFi.
+
+### Запуск тестов
+
+```bash
+cd gateway
+python3 -m pytest tests/ -v
+```
+
+Быстрый запуск без подробного вывода:
+
+```bash
+cd gateway
+python3 -m pytest tests/
+```
+
+Запуск отдельного модуля:
+
+```bash
+cd gateway
+python3 -m pytest tests/test_nifi_client.py -v
+```
+
+### Структура тестов
+
+| Файл | Покрытие |
+|------|---------|
+| `test_config.py` | Settings defaults, env-var overrides, префикс NIFI_MCP_ |
+| `test_nifi_registry.py` | ConnectionInfo, ConnectionRegistry (add/remove/get/save/load) |
+| `test_nifi_client_manager.py` | URL-нормализация, connect/disconnect, session routing, cleanup |
+| `test_nifi_client.py` | NiFiClient REST wrappers (GET/PUT/POST/DELETE), version detection |
+| `test_nifi_auth.py` | KnoxAuthFactory — все методы аутентификации |
+| `test_tools_admin.py` | connect_nifi, disconnect_nifi, switch_nifi, list/status/test |
+| `test_tools_read.py` | 25 read-only MCP tools, redact sensitive, error handling |
+| `test_tools_write.py` | 42 write MCP tools, readonly guard, tool dispatch |
+| `test_mcp_server.py` | list_tools, call_tool dispatch, error handling |
+| `test_server.py` | /health endpoint, OAuth endpoints, auth detection |
+| `test_best_practices.py` | NiFiBestPractices, analyze_flow_request, SetupGuide |
+
+### Требования
+
+Тесты используют только `pytest` и `pytest-asyncio` (уже установлены в dev-окружении). Все HTTP-запросы к NiFi заменены mock-объектами.
+
+```bash
+pip install pytest pytest-asyncio
+```
+
 ## Стек
 
 - **Python 3.12** + requests + Starlette + uvicorn
