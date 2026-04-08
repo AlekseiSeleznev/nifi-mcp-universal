@@ -166,7 +166,8 @@ connect_nifi(name="dev", url="http://localhost:8080", auth_method="no_auth", rea
 
 - Контейнер настроен с `restart: always` — автоматически стартует при запуске Docker
 - MCP зарегистрирован с `scope: user` — работает во **всех** сеансах Claude Code без повторной настройки
-- После перезагрузки Docker должен быть запущен (`sudo systemctl enable docker` на Linux)
+- **Linux:** включите автозапуск Docker: `sudo systemctl enable docker` — контейнер поднимется при загрузке системы
+- **Windows:** в Docker Desktop → Settings → General включите **"Start Docker Desktop when you log in"** — контейнеры запустятся при входе в систему автоматически
 
 ---
 
