@@ -161,7 +161,7 @@ if [ "$OS" = "linux" ] && command -v systemctl >/dev/null 2>&1; then
   SERVICE_NAME="nifi-mcp-universal"
   SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
   WORK_DIR="$(pwd)"
-  if [ ! -f "$SERVICE_FILE" ] || ! grep -q "docker compose up -d --build" "$SERVICE_FILE" 2>/dev/null; then
+  if [ ! -f "$SERVICE_FILE" ] || ! grep -q "\-f ${WORK_DIR}/docker-compose.yml" "$SERVICE_FILE" 2>/dev/null; then
     SERVICE_CONTENT="[Unit]
 Description=${SERVICE_NAME} (Docker Compose)
 Requires=docker.service
@@ -171,9 +171,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=${WORK_DIR}
-ExecStart=/usr/bin/docker compose up -d --build
-ExecStop=/usr/bin/docker compose down
+ExecStart=/usr/bin/docker compose -f ${WORK_DIR}/docker-compose.yml up -d --build
+ExecStop=/usr/bin/docker compose -f ${WORK_DIR}/docker-compose.yml down
 TimeoutStartSec=300
 
 [Install]
