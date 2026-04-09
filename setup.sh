@@ -156,6 +156,44 @@ else
   exit 1
 fi
 
+# ── 6b. Install systemd service (Linux) ─────────────────────────
+if [ "$OS" = "linux" ] && command -v systemctl >/dev/null 2>&1; then
+  SERVICE_NAME="nifi-mcp-universal"
+  SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+  WORK_DIR="$(pwd)"
+  if [ ! -f "$SERVICE_FILE" ] || ! grep -q "docker compose up -d --build" "$SERVICE_FILE" 2>/dev/null; then
+    SERVICE_CONTENT="[Unit]
+Description=${SERVICE_NAME} (Docker Compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=${WORK_DIR}
+ExecStart=/usr/bin/docker compose up -d --build
+ExecStop=/usr/bin/docker compose down
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target"
+    if printf '%s\n' "$SERVICE_CONTENT" | sudo tee "$SERVICE_FILE" > /dev/null 2>&1; then
+      sudo systemctl daemon-reload
+      sudo systemctl enable "${SERVICE_NAME}.service"
+      ok "systemd service installed: ${SERVICE_NAME} (auto-start on boot with image rebuild)"
+    else
+      warn "Could not install systemd service (no sudo). To install manually:"
+      warn "  sudo tee ${SERVICE_FILE} > /dev/null << 'SVCEOF'"
+      printf '%s\n' "$SERVICE_CONTENT"
+      warn "SVCEOF"
+      warn "  sudo systemctl daemon-reload && sudo systemctl enable ${SERVICE_NAME}.service"
+    fi
+  else
+    info "systemd service already up to date: ${SERVICE_NAME}"
+  fi
+fi
+
 # ── 7. Register in Claude Code ──────────────────────────────────
 echo ""
 echo "=== Registering MCP server ==="

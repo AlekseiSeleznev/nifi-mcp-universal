@@ -80,7 +80,8 @@ cd nifi-mcp-universal
 2. Создаёт `.env` из `.env.example` (порт 8085)
 3. Собирает и запускает Docker-контейнер (`restart: always` — переживает перезагрузку)
 4. Ждёт healthcheck
-5. Регистрирует MCP-сервер в Claude Code через `claude mcp add`
+5. **Linux:** устанавливает и включает systemd-сервис `nifi-mcp-universal` — при старте системы пересобирает образы (`docker compose up -d --build`) и запускает контейнер (защита от повреждения образов после некорректного выключения)
+6. Регистрирует MCP-сервер в Claude Code через `claude mcp add`
 
 После установки откройте Claude Code и выполните `/mcp` для проверки.
 
@@ -468,16 +469,20 @@ docker compose down && docker compose up -d --build
 
 ### После перезагрузки не работает
 
+На Linux сервис настраивается автоматически через `setup.sh`. Если контейнер не поднялся:
+
 ```bash
-# Убедиться, что контейнер запущен
-docker ps | grep nifi-mcp
+# Статус сервиса
+systemctl status nifi-mcp-universal
 
-# Если не запущен — запустить вручную
-docker compose up -d
+# Перезапустить сервис (пересоберёт образ при необходимости)
+sudo systemctl restart nifi-mcp-universal
 
-# На Linux — включить автозапуск Docker
+# Убедиться, что Docker включён
 sudo systemctl enable docker
 ```
+
+На Windows: Docker Desktop → Settings → General → включите **"Start Docker Desktop when you log in"**.
 
 ### Порт 8085 занят
 
