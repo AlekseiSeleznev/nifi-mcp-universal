@@ -17,7 +17,7 @@ from mcp.server.streamable_http import StreamableHTTPServerTransport
 from gateway.config import settings
 from gateway.nifi_registry import ConnectionInfo, registry
 from gateway.nifi_client_manager import client_manager, CERTS_DIR
-from gateway.mcp_server import server as mcp_server
+from gateway.mcp_server import server as mcp_server, _current_session_id
 
 log = logging.getLogger(__name__)
 
@@ -177,8 +177,16 @@ async def handle_mcp(scope, receive, send):
         await ready.wait()
         _transports[new_id] = transport
         _session_tasks[new_id] = task
+        session_id = new_id
 
-    await transport.handle_request(scope, receive, send)
+    # Inject the resolved session ID into the ContextVar so that tool handlers
+    # in mcp_server.py can read it via _get_session_id() without touching any
+    # private MCP SDK symbols.
+    token = _current_session_id.set(session_id)
+    try:
+        await transport.handle_request(scope, receive, send)
+    finally:
+        _current_session_id.reset(token)
 
 
 # ── Dashboard routes (lazy import) ─────────────────────────────────

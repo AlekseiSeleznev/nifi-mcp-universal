@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import logging
 
 from mcp.server import Server
@@ -11,6 +12,13 @@ from gateway.tools import admin, read_tools, write_tools
 from gateway.nifi_client_manager import client_manager
 
 log = logging.getLogger(__name__)
+
+# Per-request context variable holding the Mcp-Session-Id header value.
+# Set by server.py's handle_mcp() before forwarding each request to the
+# transport, so tool handlers can retrieve it without touching MCP SDK internals.
+_current_session_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "_current_session_id", default=None
+)
 
 server = Server("nifi-mcp-universal")
 
@@ -67,16 +75,12 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
 
 def _get_session_id() -> str | None:
-    """Try to extract session_id from the current MCP request context."""
-    try:
-        from mcp.server import request_ctx
-        ctx = request_ctx.get()
-        if ctx and ctx.meta:
-            return getattr(ctx.meta, "session_id", None)
-        if ctx and hasattr(ctx, "session"):
-            session = ctx.session
-            if hasattr(session, "_session_id"):
-                return session._session_id
-    except Exception:
-        pass
-    return None
+    """Return the Mcp-Session-Id for the current request.
+
+    The value is injected by server.py's handle_mcp() via _current_session_id
+    ContextVar before the request is forwarded to the MCP transport.  When
+    called outside an HTTP request (e.g. from tests or stdio transport) the
+    ContextVar default of None is returned, which causes the client_manager to
+    fall back to the global active connection.
+    """
+    return _current_session_id.get()

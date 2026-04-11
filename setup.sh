@@ -208,6 +208,23 @@ WantedBy=multi-user.target"
   fi
 fi
 
+# ── 6c. Ensure Docker Desktop autostart (Windows) ───────────────────────────
+if [ "$OS" = "windows" ]; then
+  PS_SCRIPT="$(pwd)/tools/ensure-docker-autostart-windows.ps1"
+  if [ -f "$PS_SCRIPT" ]; then
+    info "Ensuring Docker Desktop is set to start at login..."
+    if powershell -ExecutionPolicy Bypass -File "$PS_SCRIPT" 2>/dev/null; then
+      ok "Docker Desktop autostart configured"
+    else
+      warn "Could not configure Docker Desktop autostart automatically."
+      warn "Please enable manually: Docker Desktop → Settings → General →"
+      warn "  'Start Docker Desktop when you log in'"
+    fi
+  else
+    warn "tools/ensure-docker-autostart-windows.ps1 not found — skipping autostart setup"
+  fi
+fi
+
 # ── 7. Register in Claude Code ──────────────────────────────────
 echo ""
 echo "=== Registering MCP server ==="

@@ -58,7 +58,9 @@ over the network.
 1. **Just the MCP gateway** → `./setup.sh` — works on Linux, macOS, Windows.
 2. **Post-reboot auto-start** →
    - Linux: `setup.sh` installs a systemd service automatically.
-   - Windows/macOS: Docker Desktop "Start Docker Desktop when you log in" (default ON).
+   - Windows: `setup.sh` runs `tools/ensure-docker-autostart-windows.ps1` to add a
+     registry `Run` key for Docker Desktop (idempotent, survives user-disabling the checkbox).
+   - macOS: Docker Desktop "Start Docker Desktop when you log in" (default ON).
 3. **Secure NiFi (mTLS / P12)** → upload certificate via Dashboard after setup.
 4. **Knox / CDP NiFi** → provide Knox token, cookie, or passcode when connecting.
 5. **Protected MCP endpoint** → set `NIFI_MCP_API_KEY` in `.env`.
@@ -218,14 +220,21 @@ cd nifi-mcp-universal
    networking and explicit port mapping. `host.docker.internal` resolves to the
    Windows host — use this if NiFi runs on the same machine.
 
-3. Steps 3–9 are identical to Linux (create `.env`, check port, build, health check,
-   register MCP). Systemd step (step 8) is skipped on Windows.
+3. **Configures Docker Desktop autostart** (Windows-only):
+   - Runs `tools/ensure-docker-autostart-windows.ps1` via `powershell -ExecutionPolicy Bypass`.
+   - The script adds/updates `HKCU:\Software\Microsoft\Windows\CurrentVersion\Run`
+     key `Docker Desktop` pointing to the Docker Desktop executable.
+   - If Docker daemon is not running, it optionally starts Docker Desktop immediately.
+   - Idempotent: re-running is safe.
+
+4. Steps 3–9 are otherwise identical to Linux (create `.env`, check port, build,
+   health check, register MCP). Systemd step (step 8) is skipped on Windows.
 
 ### Post-reboot survival on Windows
 
 | Component | Mechanism |
 |-----------|-----------|
-| Docker Desktop | "Start Docker Desktop when you log in" (Docker Desktop setting) |
+| Docker Desktop | Registry autostart key set by `tools/ensure-docker-autostart-windows.ps1` during setup |
 | Gateway container | `restart: always` — starts automatically when Docker Desktop starts |
 | MCP registration | `~/.claude/.config.json` or `%USERPROFILE%\.claude\.config.json` (persistent) |
 | NiFi connections | Docker volume `gw-data` → `nifi_state.json` (persistent) |
@@ -233,6 +242,7 @@ cd nifi-mcp-universal
 
 There is no Windows Scheduled Task needed for this project (unlike onec-mcp-universal)
 because there is no host-side export service — the gateway runs entirely in Docker.
+Docker Desktop autostart is ensured via a registry `Run` key configured at install time.
 
 ### Verification after reboot (Windows PowerShell)
 
@@ -256,7 +266,7 @@ curl http://localhost:8085/health
 | Docker daemon not running | Start Docker Desktop from taskbar |
 | Port 8085 occupied | Change `NIFI_MCP_PORT=8086` in `.env`, re-run `./setup.sh` |
 | `host.docker.internal` not resolved | Update Docker Desktop to 4.25+ |
-| Container won't start after reboot | Docker Desktop → Settings → enable "Start at login" |
+| Container won't start after reboot | Re-run `powershell -ExecutionPolicy Bypass -File tools\ensure-docker-autostart-windows.ps1` or enable manually: Docker Desktop → Settings → General → "Start Docker Desktop when you log in" |
 
 ---
 
@@ -315,6 +325,8 @@ When user says "install nifi-mcp-universal from GitHub":
 │   ├── tests/                      # 330 pytest tests (no real NiFi required)
 │   ├── Dockerfile
 │   └── requirements.txt
+├── tools/
+│   └── ensure-docker-autostart-windows.ps1  # Adds Docker Desktop Run key in HKCU registry
 ├── docker-compose.yml              # Main (Linux, network_mode: host)
 ├── docker-compose.windows.yml      # Windows/macOS reference override
 ├── setup.sh                        # One-command setup (idempotent)
