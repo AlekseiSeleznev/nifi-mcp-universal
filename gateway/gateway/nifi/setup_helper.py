@@ -67,46 +67,51 @@ class SetupGuide:
     def validate_current_config() -> Tuple[bool, List[str], List[str]]:
         """
         Validate current environment configuration.
-        
+
+        Reads variables with the canonical NIFI_MCP_ prefix that pydantic-settings
+        uses, but also falls back to the legacy unprefixed names for compatibility.
+
         Returns:
             Tuple of (is_valid, errors, warnings)
         """
         errors = []
         warnings = []
-        
-        # Check required: NIFI_API_BASE
-        nifi_api_base = os.getenv("NIFI_API_BASE")
+
+        # Support both NIFI_MCP_NIFI_API_BASE (canonical) and NIFI_API_BASE (legacy)
+        nifi_api_base = os.getenv("NIFI_MCP_NIFI_API_BASE") or os.getenv("NIFI_API_BASE")
         if not nifi_api_base:
-            errors.append("❌ NIFI_API_BASE is required but not set")
-            errors.append("   Example: export NIFI_API_BASE='https://nifi-host.com/nifi-api'")
+            errors.append("NIFI_MCP_NIFI_API_BASE is not set (no default NiFi connection)")
+            errors.append("   You can still add connections via the Dashboard or connect_nifi tool.")
+            errors.append("   Example: NIFI_MCP_NIFI_API_BASE=https://nifi-host.com/nifi-api")
         elif not nifi_api_base.startswith("http"):
-            errors.append("❌ NIFI_API_BASE must start with 'http://' or 'https://'")
-        
-        # Check authentication (at least one method)
-        knox_token = os.getenv("KNOX_TOKEN")
-        knox_cookie = os.getenv("KNOX_COOKIE")
-        knox_user = os.getenv("KNOX_USER")
-        knox_password = os.getenv("KNOX_PASSWORD")
-        
-        has_auth = any([knox_token, knox_cookie, (knox_user and knox_password)])
-        
-        if not has_auth:
-            warnings.append("⚠️  No authentication configured (requests will fail if auth is required)")
-            warnings.append("   Recommended: Set KNOX_TOKEN for CDP NiFi")
-            warnings.append("   Example: export KNOX_TOKEN='eyJqa3UiOi...'")
-        
+            errors.append("NIFI_MCP_NIFI_API_BASE must start with 'http://' or 'https://'")
+
+        # Check authentication — prefer NIFI_MCP_ prefix, fall back to old names
+        knox_token = os.getenv("NIFI_MCP_KNOX_TOKEN") or os.getenv("KNOX_TOKEN")
+        knox_cookie = os.getenv("NIFI_MCP_KNOX_COOKIE") or os.getenv("KNOX_COOKIE")
+        knox_user = os.getenv("NIFI_MCP_KNOX_USER") or os.getenv("KNOX_USER")
+        knox_password = os.getenv("NIFI_MCP_KNOX_PASSWORD") or os.getenv("KNOX_PASSWORD")
+        client_p12 = os.getenv("NIFI_MCP_NIFI_CLIENT_P12")
+
+        has_auth = any([knox_token, knox_cookie, client_p12, (knox_user and knox_password)])
+
+        if nifi_api_base and not has_auth:
+            warnings.append("No authentication configured (requests will fail if auth is required)")
+            warnings.append("   Recommended: Set NIFI_MCP_KNOX_TOKEN for CDP NiFi")
+            warnings.append("   Example: NIFI_MCP_KNOX_TOKEN=eyJqa3UiOi...")
+
         # Check SSL verification
-        verify_ssl = os.getenv("KNOX_VERIFY_SSL", "true").lower()
+        verify_ssl = (os.getenv("NIFI_MCP_VERIFY_SSL") or os.getenv("KNOX_VERIFY_SSL", "true")).lower()
         if verify_ssl == "false":
-            warnings.append("⚠️  SSL verification disabled (KNOX_VERIFY_SSL=false)")
+            warnings.append("SSL verification disabled (NIFI_MCP_VERIFY_SSL=false)")
             warnings.append("   This is insecure for production use")
-        
+
         # Check readonly mode
-        readonly = os.getenv("NIFI_READONLY", "true").lower()
+        readonly = (os.getenv("NIFI_MCP_NIFI_READONLY") or os.getenv("NIFI_READONLY", "true")).lower()
         if readonly == "false":
-            warnings.append("⚠️  Write operations enabled (NIFI_READONLY=false)")
+            warnings.append("Write operations enabled (NIFI_MCP_NIFI_READONLY=false)")
             warnings.append("   Be careful - you can modify flows!")
-        
+
         is_valid = len(errors) == 0
         return is_valid, errors, warnings
     

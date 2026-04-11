@@ -1071,25 +1071,37 @@ async def api_connect(request: Request) -> Response:
         cert_path = ""
         cert_key_path = ""
 
+        # Validate name before using it in path construction
+        if name and not _CONN_NAME_RE.match(name):
+            return _json({"error": "Invalid connection name. Use only letters, digits, hyphens, underscores (max 63 chars)."}, 400)
+
         # Handle cert file upload (sanitize filename to prevent path traversal)
+        # Max cert size: 1 MB (certs should be tiny; prevents DoS)
+        _MAX_CERT_BYTES = 1 * 1024 * 1024
         cert_file = form.get("cert_file")
         if cert_file and hasattr(cert_file, "read"):
-            safe_filename = os.path.basename(cert_file.filename or "cert")
+            safe_filename = os.path.basename(cert_file.filename or "cert") or "cert"
             cert_dir = os.path.join(CERTS_DIR, name)
             os.makedirs(cert_dir, exist_ok=True)
             dest = os.path.join(cert_dir, safe_filename)
+            data = await cert_file.read()
+            if len(data) > _MAX_CERT_BYTES:
+                return _json({"error": "Certificate file too large (max 1 MB)"}, 400)
             with open(dest, "wb") as f:
-                f.write(await cert_file.read())
+                f.write(data)
             cert_path = f"{name}/{safe_filename}"
 
         key_file = form.get("key_file")
         if key_file and hasattr(key_file, "read"):
-            safe_key_filename = os.path.basename(key_file.filename or "key")
+            safe_key_filename = os.path.basename(key_file.filename or "key") or "key"
             cert_dir = os.path.join(CERTS_DIR, name)
             os.makedirs(cert_dir, exist_ok=True)
             dest = os.path.join(cert_dir, safe_key_filename)
+            data = await key_file.read()
+            if len(data) > _MAX_CERT_BYTES:
+                return _json({"error": "Key file too large (max 1 MB)"}, 400)
             with open(dest, "wb") as f:
-                f.write(await key_file.read())
+                f.write(data)
             cert_key_path = f"{name}/{safe_key_filename}"
 
         conn = ConnectionInfo(
@@ -1201,25 +1213,32 @@ async def api_edit(request: Request) -> Response:
     cert_key_path = old_conn.cert_key_path if old_conn else ""
     cert_password = old_conn.cert_password if old_conn else ""
 
+    _MAX_CERT_BYTES = 1 * 1024 * 1024
     if "multipart" in content_type:
         cert_file = form.get("cert_file")
         if cert_file and hasattr(cert_file, "read"):
-            safe_filename = os.path.basename(cert_file.filename or "cert")
+            safe_filename = os.path.basename(cert_file.filename or "cert") or "cert"
             cert_dir = os.path.join(CERTS_DIR, new_name)
             os.makedirs(cert_dir, exist_ok=True)
             dest = os.path.join(cert_dir, safe_filename)
+            data = await cert_file.read()
+            if len(data) > _MAX_CERT_BYTES:
+                return _json({"error": "Certificate file too large (max 1 MB)"}, 400)
             with open(dest, "wb") as f:
-                f.write(await cert_file.read())
+                f.write(data)
             cert_path = f"{new_name}/{safe_filename}"
 
         key_file = form.get("key_file")
         if key_file and hasattr(key_file, "read"):
-            safe_key_filename = os.path.basename(key_file.filename or "key")
+            safe_key_filename = os.path.basename(key_file.filename or "key") or "key"
             cert_dir = os.path.join(CERTS_DIR, new_name)
             os.makedirs(cert_dir, exist_ok=True)
             dest = os.path.join(cert_dir, safe_key_filename)
+            data = await key_file.read()
+            if len(data) > _MAX_CERT_BYTES:
+                return _json({"error": "Key file too large (max 1 MB)"}, 400)
             with open(dest, "wb") as f:
-                f.write(await key_file.read())
+                f.write(data)
             cert_key_path = f"{new_name}/{safe_key_filename}"
 
         pw = form.get("cert_password")

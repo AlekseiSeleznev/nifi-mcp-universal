@@ -21,7 +21,7 @@ class TestSettingsDefaults:
     def test_port_default(self):
         from gateway.config import Settings
         s = Settings()
-        assert s.port == 8080
+        assert s.port == 8085
 
     def test_log_level_default(self):
         from gateway.config import Settings

@@ -16,6 +16,21 @@ CONTAINER="nifi-mcp-gateway"
 # ── Helpers ──────────────────────────────────────────────────────
 env_val() { grep "^$1=" "$2" 2>/dev/null | head -1 | cut -d= -f2-; }
 
+# ensure_env KEY VALUE FILE — add or update KEY=VALUE in FILE (idempotent)
+ensure_env() {
+  local key="$1" value="$2" file="$3"
+  if grep -q "^${key}=" "$file" 2>/dev/null; then
+    # Key exists — update only if the current value is empty or a placeholder
+    local cur
+    cur=$(env_val "$key" "$file")
+    if [ -z "$cur" ] || echo "$cur" | grep -q "^#\|example\|change"; then
+      sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+    fi
+  else
+    echo "${key}=${value}" >> "$file"
+  fi
+}
+
 ok()   { echo "[+] $*"; }
 info() { echo "[i] $*"; }
 warn() { echo "[!] $*"; }

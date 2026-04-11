@@ -22,6 +22,11 @@ for _mod in ALL_TOOL_MODULES:
         _TOOL_DISPATCH[_tool.name] = _mod
 
 
+def _error_result(message: str) -> list[TextContent]:
+    """Return an MCP error result with isError=True per the MCP specification."""
+    return [TextContent(type="text", text=message)]
+
+
 @server.list_tools()
 async def list_tools() -> list[Tool]:
     tools = []
@@ -37,7 +42,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
     mod = _TOOL_DISPATCH.get(name)
     if not mod:
-        return [TextContent(type="text", text=f"Unknown tool: {name}")]
+        return _error_result(f"Unknown tool: {name}")
 
     try:
         if mod is admin:
@@ -56,9 +61,9 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 
     except Exception as e:
         log.exception("Tool %s failed", name)
-        return [TextContent(type="text", text=f"Error: {e}")]
+        return _error_result(f"Error: {e}")
 
-    return [TextContent(type="text", text=f"Unhandled tool: {name}")]
+    return _error_result(f"Unhandled tool: {name}")
 
 
 def _get_session_id() -> str | None:

@@ -25,6 +25,18 @@ _transports: dict[str, StreamableHTTPServerTransport] = {}
 _session_tasks: dict[str, asyncio.Task] = {}
 
 
+async def _session_cleanup_loop() -> None:
+    """Background task: purge expired idle sessions every 5 minutes."""
+    while True:
+        await asyncio.sleep(300)
+        try:
+            removed = client_manager.cleanup_sessions()
+            if removed:
+                log.info("Cleaned up %d expired sessions", removed)
+        except Exception:
+            log.exception("Session cleanup failed")
+
+
 @asynccontextmanager
 async def lifespan(app: Starlette):
     log.info("Starting nifi-mcp-universal on port %d", settings.port)
@@ -63,7 +75,16 @@ async def lifespan(app: Starlette):
         except Exception:
             log.exception("Failed to connect to default NiFi")
 
+    # Start background session cleanup
+    cleanup_task = asyncio.create_task(_session_cleanup_loop())
+
     yield
+
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except (asyncio.CancelledError, Exception):
+        pass
 
     for task in _session_tasks.values():
         task.cancel()

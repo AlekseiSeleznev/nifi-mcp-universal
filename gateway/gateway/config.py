@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Gateway
-    port: int = 8080
+    port: int = 8085
     log_level: str = "INFO"
     api_key: str = ""
 

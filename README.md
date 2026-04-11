@@ -385,7 +385,9 @@ python3 -m pytest tests/test_nifi_client.py -v
 |------|---------|
 | `test_config.py` | Settings defaults, env-var overrides, префикс NIFI_MCP_ |
 | `test_nifi_registry.py` | ConnectionInfo, ConnectionRegistry (add/remove/get/save/load) |
+| `test_nifi_registry_extra.py` | Persistence, active management, unknown field filtering |
 | `test_nifi_client_manager.py` | URL-нормализация, connect/disconnect, session routing, cleanup |
+| `test_session_cleanup.py` | Session cleanup, last-access updates, status counts |
 | `test_nifi_client.py` | NiFiClient REST wrappers (GET/PUT/POST/DELETE), version detection |
 | `test_nifi_auth.py` | KnoxAuthFactory — все методы аутентификации |
 | `test_tools_admin.py` | connect_nifi, disconnect_nifi, switch_nifi, list/status/test |
@@ -394,6 +396,9 @@ python3 -m pytest tests/test_nifi_client.py -v
 | `test_mcp_server.py` | list_tools, call_tool dispatch, error handling |
 | `test_server.py` | /health endpoint, OAuth endpoints, auth detection |
 | `test_best_practices.py` | NiFiBestPractices, analyze_flow_request, SetupGuide |
+| `test_best_practices_extra.py` | SmartFlowBuilder, root PG id extraction, flow validation |
+| `test_setup_helper.py` | validate_current_config, env prefix compatibility, auth detection |
+| `test_security.py` | Cert upload size limits, connection name validation, credential masking |
 
 ### Требования
 
@@ -507,6 +512,90 @@ empty_connection_queue(connection_id="...")
 ```
 
 > Write-операции (`empty_connection_queue`, `start_processor` и др.) доступны только если подключение создано с `readonly=false`.
+
+---
+
+---
+
+## English Quick Reference
+
+### Install
+
+```bash
+git clone https://github.com/AlekseiSeleznev/nifi-mcp-universal.git
+cd nifi-mcp-universal
+./setup.sh
+```
+
+`setup.sh` is **idempotent** — safe to re-run on an existing installation.
+
+### What setup.sh does
+
+1. Detects OS — on macOS/Windows creates `docker-compose.override.yml` for bridge networking
+2. Creates `.env` from `.env.example` if it doesn't exist (preserves existing `.env`)
+3. Builds and starts the Docker container (`restart: always`)
+4. On Linux: installs a systemd service `nifi-mcp-universal` (auto-start after reboot)
+5. Registers the MCP server in Claude Code via `claude mcp add`
+
+### Post-reboot survival
+
+| Platform | Mechanism |
+|----------|-----------|
+| Linux | `restart: always` + systemd service `nifi-mcp-universal` |
+| Windows/macOS | `restart: always` + Docker Desktop "Start at login" |
+| MCP registration | Stored in `~/.claude/.config.json` (persistent) |
+
+### Architecture
+
+```
+Claude Code / Cursor
+    │  HTTP :8085/mcp (Streamable HTTP)
+    ▼
+┌─────────────────────────────────────┐
+│  nifi-mcp-universal  (Python)       │
+│  ├─ MCP tool dispatch               │
+│  ├─ Per-session NiFi routing        │
+│  ├─ Multi-NiFi connection registry  │
+│  └─ Dashboard  :8085/dashboard      │
+└─────────────────────────────────────┘
+         │  HTTPS (configurable)
+         ▼
+   Apache NiFi 1.x / 2.x
+```
+
+### NiFi Compatibility
+
+| Feature | NiFi 1.x | NiFi 2.x |
+|---------|----------|----------|
+| All read-only tools | Yes | Yes |
+| All write tools | Yes | Yes |
+| Parameter contexts | Yes (≥1.15) | Yes |
+| Version auto-detect | Yes | Yes |
+| Knox/CDP auth | Yes | Yes |
+
+### Configuration reference
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NIFI_MCP_PORT` | `8085` | Gateway listen port |
+| `NIFI_MCP_LOG_LEVEL` | `INFO` | Log level |
+| `NIFI_MCP_API_KEY` | — | Bearer token for MCP endpoint protection |
+| `NIFI_MCP_NIFI_API_BASE` | — | NiFi URL for auto-connect on startup |
+| `NIFI_MCP_NIFI_READONLY` | `true` | Default read-only mode |
+| `NIFI_MCP_VERIFY_SSL` | `true` | SSL certificate verification |
+| `NIFI_MCP_HTTP_TIMEOUT` | `30` | NiFi HTTP request timeout (sec) |
+| `NIFI_MCP_SESSION_TIMEOUT` | `28800` | Idle session expiry (sec, 8 h) |
+
+### Troubleshooting (English)
+
+| Problem | Solution |
+|---------|----------|
+| MCP not in `/mcp` | `docker ps` — check container is running; `claude mcp list` |
+| Port 8085 in use | Change `NIFI_MCP_PORT` in `.env`, re-run `./setup.sh` |
+| SSL error | Use `verify_ssl=false` or upload a CA cert via Dashboard |
+| Write denied | Connect with `readonly=false` |
+| Container not starting after reboot (Linux) | `sudo systemctl status nifi-mcp-universal` |
+| Container not starting after reboot (Windows) | Enable "Start Docker Desktop when you log in" |
 
 ---
 

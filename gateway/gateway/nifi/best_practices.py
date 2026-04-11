@@ -355,7 +355,9 @@ class SmartFlowBuilder:
             Created process group details
         """
         if parent_pg_id is None:
-            parent_pg_id = self.client.get_root_process_group()["id"]
+            root = self.client.get_root_process_group()
+            # NiFi API returns {"processGroupFlow": {"id": "root-id", ...}}
+            parent_pg_id = root.get("processGroupFlow", {}).get("id") or root.get("id", "root")
         
         # Create process group for the flow
         pg = self.client.create_process_group(parent_pg_id, flow_name)

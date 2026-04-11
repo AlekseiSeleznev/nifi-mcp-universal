@@ -29,8 +29,8 @@ class TestReadonlyGuard:
     async def test_readonly_blocks_all_writes(self):
         client = _mock_client(start_processor={})
         result = await write_tools.handle("start_processor", {"processor_id": "p1", "version": 0}, client, readonly=True)
-        assert "DENIED" in result[0].text
-        assert "read-only" in result[0].text.lower()
+        assert "read-only mode" in result[0].text.lower()
+        assert "readonly=false" in result[0].text.lower()
 
     @pytest.mark.asyncio
     async def test_non_readonly_allows_write(self):

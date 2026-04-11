@@ -5,19 +5,24 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Optional
 
+import logging
+
 import anyio
 from mcp.types import TextContent, Tool
 
 from gateway.nifi.client import NiFiClient
+
+log = logging.getLogger(__name__)
 from gateway.nifi.flow_builder import analyze_flow_request
 from gateway.nifi.best_practices import NiFiBestPractices
 from gateway.nifi.setup_helper import SetupGuide
 
 
 def _redact_sensitive(obj: Any, max_items: int = 200) -> Any:
-    redact_keys = {"password", "passcode", "token", "secret", "kerberosKeytab", "sslKeystorePasswd"}
+    # All keys stored lowercase for case-insensitive comparison
+    _REDACT_KEYS = {"password", "passcode", "token", "secret", "kerberoskeytab", "sslkeystorepasswd"}
     if isinstance(obj, dict):
-        return {k: ("***REDACTED***" if k.lower() in redact_keys else _redact_sensitive(v, max_items)) for k, v in obj.items()}
+        return {k: ("***REDACTED***" if k.lower() in _REDACT_KEYS else _redact_sensitive(v, max_items)) for k, v in obj.items()}
     if isinstance(obj, list):
         if len(obj) > max_items:
             return [_redact_sensitive(x, max_items) for x in obj[:max_items]] + [{"truncated": True, "omitted_count": len(obj) - max_items}]
@@ -166,4 +171,5 @@ async def handle(name: str, arguments: dict, client: NiFiClient) -> list[TextCon
 
         return _json_text({"error": f"Unknown read tool: {name}"})
     except Exception as e:
+        log.exception("Read tool %s failed", name)
         return [TextContent(type="text", text=f"Error: {e}")]
