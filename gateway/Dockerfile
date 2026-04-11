@@ -10,12 +10,12 @@ COPY gateway/ gateway/
 RUN mkdir -p /data/certs
 
 ENV NIFI_MCP_STATE_FILE=/data/nifi_state.json
-ENV NIFI_MCP_PORT=8080
+ENV NIFI_MCP_PORT=8085
 ENV PYTHONUNBUFFERED=1
 
-EXPOSE 8080
+EXPOSE 8085
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://localhost:'+os.environ.get('NIFI_MCP_PORT','8080')+'/health')" || exit 1
+    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://localhost:'+os.environ.get('NIFI_MCP_PORT','8085')+'/health')" || exit 1
 
 CMD ["python", "-m", "gateway"]
