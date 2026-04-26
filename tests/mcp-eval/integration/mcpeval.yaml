@@ -1,0 +1,24 @@
+$schema: ../../../schema/mcpeval.config.schema.json
+name: "nifi-mcp-universal gated integration MCP evals"
+description: "Read-only integration checks against a registered NiFi connection."
+
+mcp:
+  servers:
+    nifi:
+      transport: streamable_http
+      url: "http://localhost:8085/mcp"
+
+default_agent: "nifi_gateway_integration_tester"
+agents:
+  definitions:
+    - name: "nifi_gateway_integration_tester"
+      instruction: |
+        Inspect only the registered NiFi connection named by
+        NIFI_MCP_EVAL_CONNECTION. Use read-only discovery tools only.
+        Never create, update, start, stop, delete, or empty queues.
+      server_names: ["nifi"]
+
+execution:
+  max_concurrency: 1
+  timeout_seconds: 120
+  retry_failed: false

@@ -1,0 +1,36 @@
+$schema: ../../../schema/mcpeval.config.schema.json
+name: "nifi-mcp-universal safe MCP evals"
+description: "Deterministic safe checks for the local streamable HTTP MCP gateway."
+
+mcp:
+  servers:
+    nifi:
+      transport: streamable_http
+      url: "http://localhost:8085/mcp"
+
+default_agent: "nifi_gateway_surface_tester"
+agents:
+  definitions:
+    - name: "nifi_gateway_surface_tester"
+      instruction: |
+        Inspect nifi-mcp-universal safely. Do not invent NiFi connections,
+        secrets, databases, hosts, flow state, SAP systems, 1C bases,
+        PostgreSQL databases, or SSH targets. Use discovery tools before
+        describing any backend state.
+      server_names: ["nifi"]
+
+metrics:
+  collect:
+    - "response_time"
+    - "tool_coverage"
+    - "iteration_count"
+
+reporting:
+  formats: ["json", "markdown"]
+  output_dir: "./test-reports"
+  include_traces: false
+
+execution:
+  max_concurrency: 4
+  timeout_seconds: 60
+  retry_failed: false
