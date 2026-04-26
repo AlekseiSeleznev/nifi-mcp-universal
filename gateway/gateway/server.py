@@ -26,6 +26,14 @@ _transports: dict[str, StreamableHTTPServerTransport] = {}
 _session_tasks: dict[str, asyncio.Task] = {}
 
 
+def _transport_is_terminated(transport: StreamableHTTPServerTransport) -> bool:
+    """Handle MCP SDK versions that expose termination state differently."""
+    state = getattr(transport, "is_terminated", None)
+    if state is None:
+        state = getattr(transport, "_terminated", False)
+    return bool(state() if callable(state) else state)
+
+
 async def _session_cleanup_loop() -> None:
     """Background task: purge expired idle sessions every 5 minutes."""
     while True:
@@ -216,7 +224,7 @@ async def handle_mcp(scope, receive, send):
     session_id = request.headers.get("mcp-session-id")
     transport = _transports.get(session_id) if session_id else None
 
-    if transport is None or transport.is_terminated:
+    if transport is None or _transport_is_terminated(transport):
         new_id = session_id or uuid.uuid4().hex
         transport = StreamableHTTPServerTransport(mcp_session_id=new_id)
         ready = asyncio.Event()
