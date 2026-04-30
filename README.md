@@ -65,9 +65,40 @@ cd nifi-mcp-universal
 6. на Linux пытаются установить `systemd` unit `nifi-mcp-universal`;
 7. на Windows пытаются включить автозапуск Docker Desktop;
 8. если найден `codex`, пытаются зарегистрировать `nifi-universal` в Codex;
-9. если `codex` отсутствует, установка всё равно завершается успешно.
+9. устанавливают bundled Codex skill `nifi-flow-layout` в `~/.codex/skills`;
+10. если `codex` отсутствует, установка всё равно завершается успешно.
 
 Если в `.env` включён `NIFI_MCP_API_KEY`, а `NIFI_MCP_API_KEY` не экспортирован в shell, gateway всё равно будет установлен, но автоматическая Codex-регистрация будет пропущена. Ручной authenticated-flow описан в [CODEX.md](CODEX.md).
+
+## Bundled Codex skill: `nifi-flow-layout`
+
+Репозиторий включает универсальный Codex skill для красивой раскладки любых Apache NiFi flows:
+
+```text
+skills/nifi-flow-layout
+```
+
+При `./setup.sh` или `.\install.ps1` skill устанавливается в:
+
+```text
+~/.codex/skills/nifi-flow-layout
+```
+
+Ручная установка одной командой:
+
+```bash
+./tools/install-codex-skills.sh
+python3 ~/.codex/skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test
+```
+
+Windows PowerShell:
+
+```powershell
+.\tools\install-codex-skills.ps1
+python ~/.codex/skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test
+```
+
+Skill не содержит NiFi URL, сертификатов, токенов или customer-specific настроек. Все параметры передаются явно при запуске. Поддерживаются режимы `audit`, `dry-run`, `apply`; перед `apply` сохраняется backup flow JSON. Подробные правила, safety model и примеры audit/dry-run/apply/screenshot см. в [docs/nifi-flow-layout.md](docs/nifi-flow-layout.md).
 
 ## После установки
 
@@ -273,6 +304,13 @@ Windows smoke checks:
 .\tools\ci-smoke.ps1
 ```
 
+Проверка bundled skill:
+
+```bash
+./tools/install-codex-skills.sh
+python3 ~/.codex/skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test
+```
+
 ## Troubleshooting
 
 ### Gateway не поднимается
@@ -295,6 +333,16 @@ curl http://localhost:8085/health
 ### Codex не зарегистрировался автоматически
 
 Это больше не считается ошибкой установки. Используйте [CODEX.md](CODEX.md) и выполните регистрацию вручную.
+
+### Codex не видит `nifi-flow-layout`
+
+Переустановите bundled skills и перезапустите/обновите Codex session:
+
+```bash
+./tools/install-codex-skills.sh
+ls ~/.codex/skills/nifi-flow-layout/SKILL.md
+python3 ~/.codex/skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test
+```
 
 ### Порт отличается от `8085`
 

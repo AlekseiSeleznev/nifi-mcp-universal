@@ -19,6 +19,8 @@ def test_ci_smoke_scripts_exist():
     install_ps = repo / "install.ps1"
     uninstall_sh = repo / "uninstall.sh"
     uninstall_ps = repo / "uninstall.ps1"
+    skill_installer_sh = repo / "tools" / "install-codex-skills.sh"
+    skill_installer_ps = repo / "tools" / "install-codex-skills.ps1"
 
     assert shell_script.exists()
     assert ps_script.exists()
@@ -29,7 +31,10 @@ def test_ci_smoke_scripts_exist():
     assert install_ps.exists()
     assert uninstall_sh.exists()
     assert uninstall_ps.exists()
+    assert skill_installer_sh.exists()
+    assert skill_installer_ps.exists()
     assert shell_script.read_text(encoding="utf-8").startswith("#!/usr/bin/env bash")
+    assert skill_installer_sh.read_text(encoding="utf-8").startswith("#!/usr/bin/env bash")
     assert uninstall_sh.read_text(encoding="utf-8").startswith("#!/usr/bin/env bash")
     assert ps_script.stat().st_size > 0
 
@@ -39,6 +44,7 @@ def test_ci_workflow_uses_smoke_scripts():
 
     assert "./tools/ci-smoke.sh" in ci_workflow
     assert "./tools/ci-smoke.ps1" in ci_workflow
+    assert "./tests/smoke/mcp-smoke.ps1" in ci_workflow
     assert "--cov-fail-under=100" in ci_workflow
 
 

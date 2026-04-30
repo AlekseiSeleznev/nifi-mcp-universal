@@ -43,6 +43,9 @@ def _make_repo(tmp_path: Path) -> Path:
     tools_dir = repo / "tools"
     tools_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(root / "tools" / "ensure-docker-autostart-windows.ps1", tools_dir / "ensure-docker-autostart-windows.ps1")
+    shutil.copy2(root / "tools" / "install-codex-skills.sh", tools_dir / "install-codex-skills.sh")
+    shutil.copy2(root / "tools" / "install-codex-skills.ps1", tools_dir / "install-codex-skills.ps1")
+    shutil.copytree(root / "skills", repo / "skills")
     return repo
 
 
@@ -173,6 +176,7 @@ def _run_setup(repo: Path, bin_dir: Path, *, extra_env: dict[str, str] | None = 
     env["PATH"] = f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin"
     env["FAKE_STATE_DIR"] = str(bin_dir)
     env["MCP_SETUP_CI"] = "1"
+    env["CODEX_SKILLS_DIR"] = str(bin_dir / "codex-skills")
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
@@ -197,6 +201,7 @@ def test_setup_registers_codex_server_when_auth_disabled(tmp_path: Path):
     assert state["transport"]["url"] == "http://localhost:8085/mcp"
     assert state["transport"]["bearer_token_env_var"] == ""
     assert "Registered 'nifi-universal' in Codex" in result.stdout
+    assert (bin_dir / "codex-skills" / "nifi-flow-layout" / "SKILL.md").exists()
 
 
 def test_setup_registers_bearer_env_var_when_api_key_is_exported(tmp_path: Path):

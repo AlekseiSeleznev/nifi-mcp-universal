@@ -63,7 +63,7 @@ cd nifi-mcp-universal
 .\install.ps1
 ```
 
-Если `codex` уже установлен, установщик попытается зарегистрировать сервер автоматически. Если `codex` отсутствует, gateway всё равно установится.
+Если `codex` уже установлен, установщик попытается зарегистрировать сервер автоматически. Если `codex` отсутствует, gateway всё равно установится. Bundled skill `nifi-flow-layout` устанавливается отдельно от MCP-регистрации, простым копированием в локальный каталог Codex skills.
 
 ## 3. Проверка после установки
 
@@ -71,11 +71,50 @@ cd nifi-mcp-universal
 curl http://localhost:8085/health
 curl http://localhost:8085/dashboard
 codex mcp get nifi-universal --json
+python3 ~/.codex/skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test
 ```
 
-Если последняя команда падает, это означает только то, что Codex-регистрация не была выполнена автоматически. Gateway при этом может быть полностью исправен.
+Если `codex mcp get` падает, это означает только то, что Codex-регистрация не была выполнена автоматически. Gateway при этом может быть полностью исправен. Если self-test skill падает, переустановите bundled skills командой `./tools/install-codex-skills.sh`.
 
-## 4. Ручная регистрация в Codex
+## 4. Bundled skill `nifi-flow-layout`
+
+`nifi-flow-layout` — универсальный Codex skill для визуальной нормализации Apache NiFi process groups. Он не содержит NiFi hosts, токенов, сертификатов, group-id или customer-specific defaults. Все параметры передаются при запуске.
+
+Установка:
+
+```bash
+./tools/install-codex-skills.sh
+```
+
+Windows:
+
+```powershell
+.\tools\install-codex-skills.ps1
+```
+
+По умолчанию файлы копируются в:
+
+```text
+~/.codex/skills/nifi-flow-layout
+```
+
+Путь можно переопределить:
+
+```bash
+CODEX_SKILLS_DIR=/custom/codex/skills ./tools/install-codex-skills.sh
+```
+
+Self-test:
+
+```bash
+python3 ~/.codex/skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test
+```
+
+После установки перезапустите или обновите Codex session, чтобы клиент увидел новый skill.
+
+Подробные команды `audit`, `dry-run`, `apply`, Playwright screenshot/DOM validation и layout conventions описаны в [docs/nifi-flow-layout.md](docs/nifi-flow-layout.md).
+
+## 5. Ручная регистрация в Codex
 
 ### Без Bearer auth
 
@@ -106,7 +145,7 @@ codex mcp get nifi-universal --json
 
 Если ключ задан в `.env`, но не экспортирован в shell, `setup.sh` и `install.ps1` не будут валить установку gateway, а просто пропустят автоматическую Codex-регистрацию.
 
-## 5. Что именно регистрируется в Codex
+## 6. Что именно регистрируется в Codex
 
 Минимальный конфиг без auth:
 
@@ -135,7 +174,7 @@ codex mcp get nifi-universal --json
 }
 ```
 
-## 6. Linux: что переживает перезагрузку
+## 7. Linux: что переживает перезагрузку
 
 - контейнер запускается с `restart: always`;
 - `setup.sh` устанавливает и сразу запускает Linux unit `nifi-mcp-universal` без forced rebuild на boot;
@@ -149,14 +188,14 @@ systemctl status nifi-mcp-universal
 sudo systemctl restart nifi-mcp-universal
 ```
 
-## 7. Windows: особенности
+## 8. Windows: особенности
 
 - штатный путь установки: `install.ps1`;
 - Docker Desktop должен быть запущен;
 - `install.ps1` вызывает `tools/ensure-docker-autostart-windows.ps1`;
 - Git Bash и WSL больше не являются обязательным единственным вариантом для Windows.
 
-## 8. Cleanup и полное удаление
+## 9. Cleanup и полное удаление
 
 ### Минимальный cleanup для Codex
 
@@ -180,7 +219,7 @@ Windows:
 
 Скрипты удаляют проектовые Docker-артефакты, Linux unit, generated override и локальную Codex-регистрацию, если `codex` доступен.
 
-## 9. Fresh install / destroy-reclone loop
+## 10. Fresh install / destroy-reclone loop
 
 Linux/macOS:
 
@@ -210,6 +249,6 @@ cd gateway
 python -m pytest tests/ -v --cov=gateway --cov-branch --cov-report=term-missing --cov-fail-under=100
 ```
 
-## 10. Когда использовать AGENTS.md
+## 11. Когда использовать AGENTS.md
 
 Если вы подключаете не Codex, используйте [AGENTS.md](AGENTS.md). Этот файл нужен только для Codex-specific onboarding и cleanup.

@@ -77,6 +77,22 @@ register_codex() {
   fi
 }
 
+install_codex_skills() {
+  local installer="$(pwd)/tools/install-codex-skills.sh"
+  if [ -x "$installer" ]; then
+    echo ""
+    echo "=== Installing bundled Codex skills ==="
+    if "$installer"; then
+      ok "Bundled Codex skills installed"
+    else
+      warn "Bundled Codex skill installation failed. Gateway install will continue."
+      warn "Run manually later: ./tools/install-codex-skills.sh"
+    fi
+  else
+    warn "tools/install-codex-skills.sh not found — skipping Codex skill installation"
+  fi
+}
+
 echo ""
 echo "=== Checking prerequisites ==="
 
@@ -269,6 +285,7 @@ if [ "$OS" = "windows" ] && [ "$SETUP_CI" != "1" ]; then
 fi
 
 register_codex "$PORT" "${API_KEY:-}"
+install_codex_skills
 
 echo ""
 echo "============================================"
@@ -282,17 +299,19 @@ echo ""
 echo "Next steps:"
 echo "  1. Open the Dashboard and add your first NiFi connection"
 echo "  2. Use AGENTS.md for generic MCP client onboarding"
-echo "  3. Use CODEX.md for optional Codex registration and cleanup"
+echo "  3. Use CODEX.md for optional Codex registration, skills, and cleanup"
 if [ "$CODEX_REGISTERED" -eq 1 ]; then
   echo "  4. Verify Codex registration: codex mcp get ${NAME} --json"
 elif [ "$HAS_CODEX" -eq 1 ] || [ "$CODEX_REGISTRATION_SKIPPED" -eq 1 ]; then
   echo "  4. Codex registration was skipped or needs manual follow-up; see CODEX.md"
 fi
+echo "  5. Skill self-test: python3 ~/.codex/skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test"
 echo ""
 echo "Runbooks:"
 echo "  - README.md : neutral install, Windows/Linux specifics, troubleshooting"
-echo "  - CODEX.md  : optional Codex registration, verification, cleanup"
+echo "  - CODEX.md  : optional Codex registration, bundled skills, verification, cleanup"
 echo "  - AGENTS.md : manual onboarding for any streamable HTTP MCP client"
+echo "  - docs/nifi-flow-layout.md : universal NiFi flow layout skill usage"
 echo ""
 echo "After reboot: container auto-starts with Docker."
 if [ "$CODEX_REGISTERED" -eq 1 ]; then

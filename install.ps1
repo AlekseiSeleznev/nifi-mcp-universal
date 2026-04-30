@@ -30,6 +30,23 @@ function Ensure-EnvKey([string]$Key, [string]$Path) {
     }
 }
 
+function Install-CodexSkills {
+    $installer = Join-Path $RepoRoot "tools/install-codex-skills.ps1"
+    if (Test-Path $installer) {
+        Write-Host ""
+        Write-Host "=== Installing bundled Codex skills ==="
+        try {
+            & $installer
+            Write-Ok "Bundled Codex skills installed"
+        } catch {
+            Write-Warn "Bundled Codex skill installation failed. Gateway install will continue."
+            Write-Warn "Run manually later: .\\tools\\install-codex-skills.ps1"
+        }
+    } else {
+        Write-Warn "tools/install-codex-skills.ps1 not found — skipping Codex skill installation"
+    }
+}
+
 Write-Host ""
 Write-Host "=== Checking prerequisites ==="
 
@@ -136,6 +153,8 @@ if ($null -ne $codexCmd) {
     }
 }
 
+Install-CodexSkills
+
 Write-Host ""
 Write-Host "============================================"
 Write-Host " nifi-mcp-universal is ready!"
@@ -148,10 +167,11 @@ Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  1. Open the Dashboard and add your first NiFi connection"
 Write-Host "  2. Use AGENTS.md for generic MCP client onboarding"
-Write-Host "  3. Use CODEX.md for optional Codex registration and cleanup"
+Write-Host "  3. Use CODEX.md for optional Codex registration, skills, and cleanup"
 if ($CodexRegistered) {
     Write-Host "  4. Verify Codex registration: codex mcp get $ServerName --json"
 } elseif ($CodexSkipped -or $null -ne $codexCmd) {
     Write-Host "  4. Codex registration was skipped or needs manual follow-up; see CODEX.md"
 }
+Write-Host "  5. Skill self-test: python3 ~/.codex/skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test"
 Write-Host ""

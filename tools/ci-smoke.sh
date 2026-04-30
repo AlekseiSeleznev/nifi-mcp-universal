@@ -11,8 +11,10 @@ else
 fi
 
 "${PYTHON_BIN}" -m compileall -q gateway
+"${PYTHON_BIN}" skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test
 bash -n setup.sh
 bash -n uninstall.sh
+bash -n tools/install-codex-skills.sh
 
 if [ ! -f .env ]; then
   if [ -f .env.example ]; then
@@ -23,7 +25,7 @@ if [ ! -f .env ]; then
 fi
 
 if command -v pwsh >/dev/null 2>&1; then
-  pwsh -NoProfile -Command "[void][scriptblock]::Create((Get-Content -Raw 'install.ps1')); [void][scriptblock]::Create((Get-Content -Raw 'uninstall.ps1'))"
+  pwsh -NoProfile -Command "[void][scriptblock]::Create((Get-Content -Raw 'install.ps1')); [void][scriptblock]::Create((Get-Content -Raw 'uninstall.ps1')); [void][scriptblock]::Create((Get-Content -Raw 'tools/install-codex-skills.ps1'))"
 else
   echo "pwsh is unavailable on this runner; skipping PowerShell syntax checks"
 fi
