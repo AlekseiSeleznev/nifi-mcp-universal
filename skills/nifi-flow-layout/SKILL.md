@@ -58,6 +58,16 @@ python3 scripts/nifi_layout.py \
   --mode apply --recursive --backup-dir ./nifi-backups
 ```
 
+## Non-negotiable visual rules from real reviews
+
+- Verify with Playwright screenshots after changes; REST geometry is not enough.
+- For dense fan-in, evaluate all useful target sides. Do not force every branch into one side or one shared point.
+- If a lower source crosses the central bus/labels when entering from the left, try right-side entry, but only after checking the full candidate route for component and label blockers.
+- Treat connection labels as real obstacles. Lines must not pass through `Name`/`Queued` boxes, even if they do not touch processors.
+- Side handler returns should avoid queue labels between main-lane processors. Use a clear side/bottom lane instead of a short route that hides under labels.
+- Side handler → output port should not add tiny doglegs when the output centerline is clear; prefer the compact side route.
+- Always inspect screenshots for the whole affected area, not only one cropped defect. If the flow is larger than a viewport, pan/scroll and capture more screenshots.
+
 ## Safety rules
 
 - Do not print secrets or certificate passphrases.
@@ -65,3 +75,11 @@ python3 scripts/nifi_layout.py \
 - Default to `audit`/`dry-run`; use `apply` only when implementation is requested.
 - Preserve revisions and current processor state; only update names, comments, positions, connection bends, labelIndex, and empty connection names.
 - Before `apply`, always write a backup flow JSON using `--backup-dir`.
+## PUIG hardening additions (2026-05-04)
+
+- `scripts/nifi_layout.py` supports `--single-group`, `--group-order top-down`, `--report-dir`, `--screenshots-dir`, `--visual-gate`, and PKCS#12 auth via `--p12`.
+- Apply mode is state-preserving by default: processor/port metadata updates do not stop running components; connection updates first try without stopping and only retry by stopping the two endpoint components when the connection queue is empty.
+- `scripts/nifi_visual_check.cjs` supports `--tile-grid CxR` and `--tile-dir` for large-canvas evidence.
+- Dense fan-in, same-column side chains, right-column handler returns, hard label packing, 12px visual label/component clearance, and 32px visual line spacing were tuned on the PUIG SAP OData → 1C:UT canvas to prevent merged wires, processor overlaps, queued-label overlaps, and near-touching lines.
+- Treat visual X/T line crossings as hard defects; use wider bus lanes instead of ambiguous intersections.
+- Non-adjacent segments of the same connection must also keep wide spacing; self-overlapping U-turns are defects.

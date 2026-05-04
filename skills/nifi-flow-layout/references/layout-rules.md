@@ -20,6 +20,11 @@
 - Prefer one main vertical spine.
 - Input port or start processor is at the top.
 - Output port or finish processor is at the bottom.
+- Final output ports are sinks, not intermediate blocks. If an output port has
+  incoming connections and no outgoing connections, place it after the last main
+  processor/process group, even when its old y-position was above the last group.
+  Do not leave a final output port between `Teams` and `Обслуживание`: it creates
+  a fake loop instead of a readable finish.
 - Side-effect/error/log processors go to the right column.
 - Keep the right column close enough to the main spine for short readable
   branches, but leave a real routing corridor between the main processors and
@@ -46,8 +51,14 @@
 - Prefer the nearest useful side of the target. Do not force every connection
   into one common point: processors, groups and ports can be entered from top,
   bottom, left or right.
+- Source side is also a routing decision. If a branch crosses another block
+  only because it leaves from the left/top, try the right/bottom exit before
+  adding more bends.
 - Avoid giant “telephone wire” loops. A local side route is better than going
   far right/up/down and then coming back.
+- A route must not visually touch a component edge except at its own arrowhead.
+  If the label/segment lies flush against a processor, group, port, or queue
+  label, treat it as an overlap and move the route to another side/lane.
 - Several routes into one output port must use separate lanes.
 - Several routes into one processor, process group, or port must also use
   separate edge slots on the target side. Do not collapse fan-in into one
@@ -59,8 +70,20 @@
   1. separate bus lanes in the open corridor;
   2. separate entry/exit slots on the component edge.
   Solving only one of them still leaves overlapping lines near the target or source.
+- Fan-in must be comb-shaped, not bundled. If several labels sit on one vertical
+  bus or several paths overlap before entering a log/error processor, route some
+  branches through the opposite side or move the error processor closer to the
+  source cluster.
+- Do not let a handler's outgoing route reuse the same short edge segment as
+  incoming failure routes. A right-column handler returning to a lower main-lane
+  processor should usually leave from the bottom first, then enter the lower
+  target from the side.
 - For output ports, prefer a bottom lane when a direct vertical connection is
   blocked by another component. This makes the route read as “branch finished”.
+- When a side processor routes to an output port below the main lane, prefer:
+  leave the side processor from the bottom/right, go below the nearby blocks,
+  then enter the output port from the right/bottom. Do not drag the line back
+  through the center corridor if a clean side exit exists.
 - If the route would cross a queued label or another component, enter from the side instead of from the top.
 - Set `labelIndex` so the connection label appears on a segment with enough free space.
 - After routing, repack `labelIndex` values globally inside the process group.
@@ -107,3 +130,36 @@ Use these values from the current Apache NiFi frontend, not guessed screenshot s
 - Use wide screenshots and, when the flow is larger than one viewport, capture
   multiple viewports or scroll/pan through the canvas. A route can look fine in
   a cropped screenshot and still create an ugly long loop outside the view.
+- Treat diagonal route segments as defects. In NiFi they usually mean the first
+  bend was put on the wrong side of the source/target, so the arrow visually
+  goes under the block or the block hides the arrowhead.
+- Dense fan-in columns must have enough corridor width for at least one visible grid cell between parallel lanes. If lanes are closer than ~16px over a long segment, treat it as fan-in overlap even if the segments are not exactly collinear.
+- A side handler returning to a lower output port should use the shortest clean bottom/right route: drop from the handler, go horizontally at the output level, then enter the output from the side. Do not draw a large rectangle below the whole group unless a real blocker forces it.
+- Connection labels are real obstacles. No route segment may pass through another connection's `Name`/`Queued` label box. If this happens, move the label to another bend or route the line around the label.
+- For dense fan-in into a right-column processor, lower sources should be tested against both left and right target edges. If the left-edge route crosses the central bus/labels, prefer a right-edge entry, but only after checking the full candidate route against component rectangles.
+- A side handler that returns to a lower main-lane processor must not cross the queue labels between main processors. If a direct side return intersects labels, move the horizontal return into a clear gap next to the target and enter from the nearest safe side.
+- For side handler → output port routes, do not add a tiny final dogleg just to separate lanes. If the output centerline is clear, route at that y-level and enter the output from the side.
+- For dense fan-in into a right-column handler with another handler underneath,
+  do not send lower sources around the far right by default: the far-side bus can
+  run straight through the lower processor. Split upper sources to the top edge
+  and keep same/lower sources in the clear left/middle corridor unless the full
+  far-side candidate is proven clear.
+- For a right-column handler returning to a lower main-lane processor, do not
+  drop from the handler centerline. Exit from the handler's left edge, use an
+  open middle corridor, then enter the lower main-lane target from the right so
+  the first vertical segment cannot pass through a lower side handler.
+- Treat label-on-component and label-on-label collisions as hard failures when
+  choosing `labelIndex`; route-line penalties must never outweigh a queued-label
+  overlap.
+- If two same-column side processors have a clear vertical gap between them,
+  prefer the direct no-bend route instead of a scored dogleg that may run along
+  or over the lower processor.
+- Lines must keep visible clearance, not merely avoid intersection: at the NiFi
+  browser zoom used for PUIG evidence, route segments need at least 12px visual
+  gap from other connection labels and component edges, and parallel route
+  segments need at least 32px visual gap over meaningful lengths.
+- When labels are packed but a neighboring line still skims the label border,
+  nudge the whole collinear route run, not a single segment. Moving only one
+  segment in a same-orientation run creates diagonal artifacts.
+- Any visual X/T crossing between different connection lines in open canvas is a defect. Use wider bus lanes or route around the crossing; only the connection's own short source/destination endpoint touch is allowed.
+- Non-adjacent segments of the same connection are also separate visual wires: self-overlapping U-turns, close parallel self-runs, or self-crossing loops must be widened or rerouted just like conflicts between different connections.

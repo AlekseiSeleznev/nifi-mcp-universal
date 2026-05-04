@@ -63,8 +63,11 @@ After installation, start a new Codex session or refresh the client skill regist
 - Move error/log/Teams/side branches into side columns.
 - Use orthogonal connection routes only: horizontal/vertical segments, no diagonals.
 - Use fan-in/fan-out lanes and separate edge slots instead of stacking several lines into one unreadable bus.
+- Keep a visible route clearance: 12px from labels/components and 32px between parallel lines in browser visual checks.
+- Treat line-to-line X/T crossings as hard defects; route around them rather than relying on visual intersections.
+- Treat non-adjacent segments of the same connection as separate visual wires: self-overlapping U-turns and self-crossing loops are defects.
 - Choose target entry side globally (`left`, `right`, `top`, `bottom`) based on source position and blockers; never force every branch to enter from the same side.
-- Perform global label packing after route calculation so queued labels do not overlap blocks or each other.
+- Perform global label packing after route calculation so queued labels do not overlap blocks, other labels, or route lines.
 - Use real NiFi UI dimensions:
   - Processor: `350x130`;
   - Process Group: `384x176`;
