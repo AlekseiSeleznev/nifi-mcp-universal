@@ -98,7 +98,7 @@ Windows PowerShell:
 python ~/.codex/skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test
 ```
 
-Skill не содержит NiFi URL, сертификатов, токенов или customer-specific настроек. Все параметры передаются явно при запуске. Поддерживаются режимы `audit`, `dry-run`, `apply`; перед `apply` сохраняется backup flow JSON. Подробные правила, safety model и примеры audit/dry-run/apply/screenshot см. в [docs/nifi-flow-layout.md](docs/nifi-flow-layout.md). Текущая bundled-версия включает строгие visual gates: 12px clearance от labels/components, 32px между параллельными линиями, запрет X/T пересечений и проверку non-adjacent сегментов одной connection.
+Skill не содержит NiFi URL, сертификатов, токенов или customer-specific настроек. Все параметры передаются явно при запуске. Поддерживаются режимы `audit`, `dry-run`, `apply`; перед `apply` сохраняется backup flow JSON. Подробные правила, safety model и примеры audit/dry-run/apply/screenshot см. в [docs/nifi-flow-layout.md](docs/nifi-flow-layout.md). Текущая bundled-версия включает строгие visual gates: 12px clearance от labels/components, 32px между параллельными линиями, запрет X/T пересечений, проверку non-adjacent сегментов одной connection и компактный целевой шаг long-lane corridors около 64 canvas units без наложения queued labels.
 
 ## После установки
 

@@ -60,6 +60,15 @@ LANE_GAP = 80.0
 LABEL_CLEARANCE = 24.0  # canvas-space equivalent of ~12px visual clearance at current NiFi zoom
 COMPONENT_CLEARANCE = 18.0
 LINE_SPACING = 48.0  # canvas-space equivalent of ~32px visual line spacing
+PREFERRED_LANE_SPACING = 64.0  # compact target: enough air without huge empty corridors
+# Outside same-column return buses may be visually compact, but their queue label
+# is centered on the lane bend.  Keep the lane far enough from the component edge
+# so the label itself has clearance; otherwise a 64px lane can still put the
+# 240px-wide "Name/Queued" label over the processor/card.
+OUTER_LABEL_LANE_GAP = CONNECTION_LABEL_WIDTH / 2.0 + LABEL_CLEARANCE
+SIDE_BASE_GAP = 800.0
+SIDE_FANIN_GAP = 80.0
+SIDE_MAX_GAP = 1460.0
 
 @dataclasses.dataclass
 class Rect:
@@ -438,7 +447,7 @@ def target_layout(nodes: Dict[str, Node], conns: Optional[List[Conn]] = None) ->
         max_fanin = max(side_incoming.values(), default=1)
         # A one-off log processor should stay near the main route. Dense fan-in needs
         # a wider corridor for labels and separate lanes, but not every side column does.
-        dynamic_gap = min(1700.0, 780.0 + max(0, max_fanin - 1) * 120.0)
+        dynamic_gap = min(SIDE_MAX_GAP, SIDE_BASE_GAP + max(0, max_fanin - 1) * SIDE_FANIN_GAP)
         side_x = MAIN_X["PROCESSOR"] + dynamic_gap
         # Put side handlers beside the nearest main step by original y. This keeps error routes horizontal.
         main_by_y = sorted(main, key=lambda n: n.y)
@@ -1138,9 +1147,19 @@ def same_column_around_route(src: Node, dst: Node, nodes: Dict[str, Node], lane:
         and abs(n.rect().cx - sr.cx) < 220.0
     ]
     if side == "right":
-        lane_x = max([sr.right, dr.right, entry_x, exit_x] + [r.right for r in blockers]) + 110.0 + lane * LINE_SPACING
+        component_edge = max([sr.right, dr.right] + [r.right for r in blockers])
+        anchor_edge = max(entry_x, exit_x)
+        lane_x = max(
+            component_edge + OUTER_LABEL_LANE_GAP,
+            anchor_edge + PREFERRED_LANE_SPACING + lane * PREFERRED_LANE_SPACING,
+        )
     else:
-        lane_x = min([sr.left, dr.left, entry_x, exit_x] + [r.left for r in blockers]) - 110.0 - lane * LINE_SPACING
+        component_edge = min([sr.left, dr.left] + [r.left for r in blockers])
+        anchor_edge = min(entry_x, exit_x)
+        lane_x = min(
+            component_edge - OUTER_LABEL_LANE_GAP,
+            anchor_edge - PREFERRED_LANE_SPACING - lane * PREFERRED_LANE_SPACING,
+        )
     bends = [
         {"x": exit_x, "y": exit_y},
         {"x": lane_x, "y": exit_y},
@@ -1598,6 +1617,10 @@ def route_connections(group_id: str, nodes: Dict[str, Node], conns: List[Conn]) 
             li = best_label_index_avoiding(nodes[sid], nodes[did], bends, nodes, connection_label_size(c, group_id), occupied_labels, final_segments, c.id)
             routed[c.id] = (bends, li)
         occupied_labels.append(label_rect(route_points(nodes[sid], nodes[did], bends), li, connection_label_size(c, group_id), bends))
+    # The final repack can legitimately move a label to another bend after the
+    # line-clearance pass.  Run one last path-vs-label nudge so a newly selected
+    # label does not end up with a neighboring route skimming or crossing it.
+    nudge_routes_away_from_labels(group_id, nodes, conns, routed)
     return routed
 
 def audit_names_comments(nodes: Dict[str, Node], conns: List[Conn]) -> Dict[str, Any]:
@@ -1819,6 +1842,12 @@ def cmd_self_test() -> None:
     assert segment_parallel_overlap(("v", 10, 0, 100), ("v", 40, 50, 150)) == 50
     assert not distinct_route_segment_pair("same", 1, "same", 2)
     assert distinct_route_segment_pair("same", 1, "same", 3)
+    compact_side = same_column_around_route(
+        Node("rs1", "PROCESSOR", "RS1", 1200, 0),
+        Node("rs2", "PROCESSOR", "RS2", 1200, 420),
+        {"mid": Node("mid", "PROCESSOR", "MID", 1200, 210)},
+    )[0]
+    assert compact_side[1]["x"] - (1200 + SIZE["PROCESSOR"][0]) <= OUTER_LABEL_LANE_GAP + 10.0
     left = Node("left", "PROCESSOR", "Left", 0, 0)
     right = Node("right", "PROCESSOR", "Right", 700, 0)
     top = Node("top", "PROCESSOR", "Top", 320, -260)
