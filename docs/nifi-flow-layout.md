@@ -60,9 +60,12 @@ After installation, start a new Codex session or refresh the client skill regist
   - never use `.00`.
 - Keep connection names empty.
 - Route the main flow top-to-bottom.
-- Move error/log/Teams/side branches into side columns.
+- Place input/source nodes on the top boundary and terminal output ports on the bottom boundary.
+- Move error/log/fallback/notification side branches into the nearest readable side lane.
+- Try cleaner node placement before adding long detours: lower or raise a side processor, align it with the processor it returns to, or move a terminal sink closer to the local branch cluster.
 - Use orthogonal connection routes only: horizontal/vertical segments, no diagonals.
 - Use fan-in/fan-out lanes and separate edge slots instead of stacking several lines into one unreadable bus.
+- Keep dense fan-in local and comb-shaped. Do not move a sink far away just to make route scoring pass.
 - Keep a visible route clearance: 12px from labels/components and 32px between parallel lines in browser visual checks.
 - Keep long return/fan-in corridors compact when possible: prefer about 64 canvas units between lanes, but reserve enough outside edge gap for the full 240px queued-label box so labels cannot touch processors or route lines.
 - Treat line-to-line X/T crossings as hard defects; route around them rather than relying on visual intersections.
@@ -75,6 +78,7 @@ After installation, start a new Codex session or refresh the client skill regist
   - Input/Output Port: `240x48`;
   - Connection label width: `240`.
 - Verify the final result visually with Playwright screenshot/DOM checks, not only REST geometry.
+- Review `topology_blockers` in the JSON report. If dense fan-in cannot be made clean with geometry alone, use a topology decision such as a funnel, collector processor, split sink, or separate process group.
 
 ## Examples
 

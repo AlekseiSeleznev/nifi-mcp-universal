@@ -367,6 +367,14 @@ def visual_id(conn: Conn, endpoint: str, current_group: str, nodes: Dict[str, No
         return gid
     return eid
 
+def is_failureish_text(text: str) -> bool:
+    text = text.lower()
+    return any(s in text for s in ["ошиб", "error", "failure", "failed", "fail", "dead-letter", "unmatched", "waiting"])
+
+def is_sideish_text(text: str) -> bool:
+    text = text.lower()
+    return is_failureish_text(text) or any(s in text for s in ["fallback", "teams", "notification", "уведом", "лог ошибки", "логирует ошиб"])
+
 def is_errorish(node: Node) -> bool:
     text = f"{node.name} {node.comments}".lower()
     return any(s in text for s in ["ошиб", "error", "failure", "dead-letter", "лог ошибки", "логирует ошиб"])
@@ -388,16 +396,35 @@ def comment_for(node: Node) -> str:
         return f"Фиксирует ошибочный сценарий для шага «{n}», чтобы сбой был виден в логах и не терялся в очередях."
     return f"Выполняет шаг «{n}» в общем сценарии. Комментарий нужен, чтобы было понятно, зачем объект стоит в потоке."
 
-def classify_main(nodes: Dict[str, Node]) -> Tuple[List[Node], List[Node]]:
+def relation_text(conn: Conn) -> str:
+    return " ".join([conn.name, *conn.relationships, conn.source_name, conn.dest_name]).lower()
+
+def processor_has_side_hint(node: Node, conns: Optional[List[Conn]]) -> bool:
+    if is_sideish_text(f"{node.name} {node.comments}"):
+        return True
+    if not conns:
+        return False
+    for c in conns:
+        if c.source_id == node.id or c.dest_id == node.id:
+            if is_sideish_text(relation_text(c)):
+                return True
+    return False
+
+def classify_main(nodes: Dict[str, Node], conns: Optional[List[Conn]] = None) -> Tuple[List[Node], List[Node]]:
     if not nodes:
         return [], []
     xs = sorted(n.x for n in nodes.values())
     base_x = xs[min(len(xs)//2, len(xs)-1)]
-    # Main lane is the visually left/central lane; far-right processors are side handlers.
+    # Main lane is the visually central lane.  Far-right processors are usually
+    # side handlers in existing flows; far-left processors are only side
+    # handlers when their name/relationships make that intent explicit
+    # (fallback/error/notification), so wide business branches are not collapsed.
     side: List[Node] = []
     main: List[Node] = []
     for n in nodes.values():
-        if n.kind == "PROCESSOR" and n.x > base_x + 430:
+        is_far_right = n.kind == "PROCESSOR" and n.x > base_x + 430
+        is_far_left_handler = n.kind == "PROCESSOR" and n.x < base_x - 430 and processor_has_side_hint(n, conns)
+        if is_far_right or is_far_left_handler:
             side.append(n)
         else:
             main.append(n)
@@ -406,29 +433,35 @@ def classify_main(nodes: Dict[str, Node]) -> Tuple[List[Node], List[Node]]:
     return main, side
 
 def target_layout(nodes: Dict[str, Node], conns: Optional[List[Conn]] = None) -> Dict[str, Tuple[float, float]]:
-    main, side = classify_main(nodes)
+    main, side = classify_main(nodes, conns)
     result: Dict[str, Tuple[float, float]] = {}
     if not main:
         return result
-    # Final output ports are visual sinks.  Keep them after the last main
-    # processor/process group even if their previous y-position was slightly
-    # above it.  Otherwise a later layout pass can put the output port between
-    # two groups and force an ugly side loop for the real final connection.
+    incoming: Dict[str, int] = collections.defaultdict(int)
+    outgoing: Dict[str, int] = collections.defaultdict(int)
+    incoming_conns: Dict[str, List[Conn]] = collections.defaultdict(list)
+    outgoing_conns: Dict[str, List[Conn]] = collections.defaultdict(list)
     if conns:
-        incoming: Dict[str, int] = collections.defaultdict(int)
-        outgoing: Dict[str, int] = collections.defaultdict(int)
         for c in conns:
             incoming[c.dest_id] += 1
             outgoing[c.source_id] += 1
+            incoming_conns[c.dest_id].append(c)
+            outgoing_conns[c.source_id].append(c)
 
-        def main_order(n: Node) -> Tuple[int, float, float]:
-            is_final_output = n.kind == "OUTPUT_PORT" and incoming.get(n.id, 0) > 0 and outgoing.get(n.id, 0) == 0
-            return (1 if is_final_output else 0, n.y, n.x)
+    def is_final_output(n: Node) -> bool:
+        return n.kind == "OUTPUT_PORT" and incoming.get(n.id, 0) > 0 and outgoing.get(n.id, 0) == 0
 
-        main.sort(key=main_order)
+    final_outputs = [n for n in main if is_final_output(n)]
+    main_body = [n for n in main if not is_final_output(n)]
+
+    def main_order(n: Node) -> Tuple[int, float, float]:
+        source_like = n.kind == "INPUT_PORT" or (incoming.get(n.id, 0) == 0 and outgoing.get(n.id, 0) > 0)
+        return (0 if source_like else 1, n.y, n.x)
+
+    main_body.sort(key=main_order)
     y = 0.0
     prev: Optional[Node] = None
-    for i, n in enumerate(main):
+    for i, n in enumerate(main_body):
         x = MAIN_X.get(n.kind, 160.0)
         if i == 0:
             y = 0.0
@@ -438,6 +471,7 @@ def target_layout(nodes: Dict[str, Node], conns: Optional[List[Conn]] = None) ->
             y = result[prev.id][1] + ph + LABEL[1] + gap
         result[n.id] = (x, y)
         prev = n
+
     if side:
         side_incoming: Dict[str, int] = collections.defaultdict(int)
         if conns:
@@ -448,16 +482,57 @@ def target_layout(nodes: Dict[str, Node], conns: Optional[List[Conn]] = None) ->
         # A one-off log processor should stay near the main route. Dense fan-in needs
         # a wider corridor for labels and separate lanes, but not every side column does.
         dynamic_gap = min(SIDE_MAX_GAP, SIDE_BASE_GAP + max(0, max_fanin - 1) * SIDE_FANIN_GAP)
-        side_x = MAIN_X["PROCESSOR"] + dynamic_gap
+        main_rects = [nodes[nid].with_pos(*pos).rect() for nid, pos in result.items()]
+        main_left = min((r.left for r in main_rects), default=MAIN_X["PROCESSOR"])
+        main_right = max((r.right for r in main_rects), default=MAIN_X["PROCESSOR"] + SIZE["PROCESSOR"][0])
+        base_x = sorted(n.x for n in nodes.values())[min(len(nodes)//2, len(nodes)-1)]
         # Put side handlers beside the nearest main step by original y. This keeps error routes horizontal.
-        main_by_y = sorted(main, key=lambda n: n.y)
-        used: Dict[float, int] = collections.defaultdict(int)
+        main_by_y = sorted(main_body, key=lambda n: n.y)
+        used: Dict[Tuple[str, float], int] = collections.defaultdict(int)
         for s in side:
-            nearest = min(main_by_y, key=lambda m: abs(m.y - s.y)) if main_by_y else s
+            preferred: Optional[Node] = None
+            for c in outgoing_conns.get(s.id, []):
+                did = visual_id(c, "dest", "", nodes)
+                if did in result and nodes[did].kind != "OUTPUT_PORT":
+                    if preferred is None or nodes[did].y > preferred.y:
+                        preferred = nodes[did]
+            nearest = preferred or (min(main_by_y, key=lambda m: abs(m.y - s.y)) if main_by_y else s)
             sy = result.get(nearest.id, (nearest.x, nearest.y))[1]
-            offset = used[sy] * 150.0
-            used[sy] += 1
+            direction = "left" if s.x < base_x else "right"
+            compact_gap = dynamic_gap if direction == "right" else max(CONNECTION_LABEL_WIDTH + 260.0, min(dynamic_gap, 620.0))
+            side_x = main_right + compact_gap if direction == "right" else main_left - compact_gap - SIZE.get(s.kind, SIZE["PROCESSOR"])[0]
+            offset = used[(direction, sy)] * 150.0
+            used[(direction, sy)] += 1
             result[s.id] = (side_x, sy + offset)
+
+    if final_outputs:
+        last_body = main_body[-1] if main_body else None
+        if last_body and last_body.id in result:
+            last_y = result[last_body.id][1]
+            last_h = SIZE.get(last_body.kind, SIZE["PROCESSOR"])[1]
+            final_y = last_y + last_h + LABEL[1] + 220.0
+        else:
+            final_y = 0.0
+        placed_rects = [nodes[nid].with_pos(*pos).rect() for nid, pos in result.items() if nodes[nid].kind in ("PROCESSOR", "PROCESS_GROUP")]
+        right_edge = max((r.right for r in placed_rects), default=MAIN_X["PROCESSOR"] + SIZE["PROCESSOR"][0])
+        left_x = MAIN_X["OUTPUT_PORT"]
+        right_x = right_edge + CONNECTION_LABEL_WIDTH + 120.0
+
+        def output_rank(n: Node) -> Tuple[int, float, float]:
+            text = f"{n.name} {n.comments} " + " ".join(relation_text(c) for c in incoming_conns.get(n.id, []))
+            return (1 if is_failureish_text(text) else 0, n.y, n.x)
+
+        final_outputs.sort(key=output_rank)
+        normal_i = 0
+        failure_i = 0
+        for n in final_outputs:
+            text = f"{n.name} {n.comments} " + " ".join(relation_text(c) for c in incoming_conns.get(n.id, []))
+            if is_failureish_text(text):
+                result[n.id] = (right_x, final_y + failure_i * (SIZE["OUTPUT_PORT"][1] + LABEL[1] + 60.0))
+                failure_i += 1
+            else:
+                result[n.id] = (left_x + normal_i * (SIZE["OUTPUT_PORT"][0] + 140.0), final_y)
+                normal_i += 1
     return result
 
 def with_targets(nodes: Dict[str, Node], targets: Dict[str, Tuple[float, float]]) -> Dict[str, Node]:
@@ -1002,8 +1077,8 @@ def route_to_side(
             # vertical segment through that processor.  Leave from the handler's
             # left edge, travel in the open middle corridor, then enter the
             # lower main-lane target from the right.  This fixes the visual
-            # "line over processor" defect seen in PUIG 30.30/30.70 side
-            # handlers without sending the return through main queue labels.
+            # "line over processor" defect seen in dense side-handler flows
+            # without sending the return through main queue labels.
             right_entry_x, right_entry_y = edge_slot(dr, "right", lane, total)
             exit_x, exit_y = source_exit_point(src, "left", lane, total)
             min_corridor_x = dr.right + label_size[0] + 120.0 + lane * 56.0
@@ -1464,7 +1539,7 @@ def route_connections(group_id: str, nodes: Dict[str, Node], conns: List[Conn]) 
             # target top edge and keep same/lower sources in the left corridor.
             # Do not use the far right edge by default: if a second handler sits
             # below the target, the far-right vertical bus runs through that
-            # processor (exactly the PUIG 30.70.90 -> 30.70.110 defect).
+            # processor.
             if src.rect().cy < dst.rect().top - 60.0:
                 side = "top"
             else:
@@ -1733,6 +1808,42 @@ def route_report(group_id: str, nodes: Dict[str, Node], conns: List[Conn], route
                     })
     return issues
 
+def infer_topology_blockers(nodes: Dict[str, Node], conns: List[Conn], route_issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Summarize visual problems that are unlikely to be solved by geometry alone."""
+    if not route_issues:
+        return []
+    issue_types = collections.Counter(str(i.get("type", "")) for i in route_issues)
+    visual_only_issue_count = sum(
+        issue_types[t]
+        for t in (
+            "segment_too_close_to_connection_label",
+            "segment_intersects_connection_label",
+            "parallel_segments_too_close",
+        )
+    )
+    if visual_only_issue_count == 0:
+        return []
+    incoming: Dict[str, List[Conn]] = collections.defaultdict(list)
+    outgoing: Dict[str, int] = collections.defaultdict(int)
+    for c in conns:
+        incoming[c.dest_id].append(c)
+        outgoing[c.source_id] += 1
+    blockers: List[Dict[str, Any]] = []
+    for node in nodes.values():
+        if node.kind != "OUTPUT_PORT":
+            continue
+        if len(incoming.get(node.id, [])) < 4 or outgoing.get(node.id, 0) != 0:
+            continue
+        blockers.append({
+            "kind": "dense_terminal_fanin_requires_topology_decision",
+            "node_id": node.id,
+            "node_name": node.name,
+            "incoming_connections": len(incoming[node.id]),
+            "reason": "single terminal output receives dense fan-in and route labels/lanes cannot all keep visual clearance",
+            "safe_options": ["funnel", "collector processor", "split sink", "separate process group"],
+        })
+    return blockers
+
 def backup(api: NiFi, group_id: str, backup_dir: Path) -> Path:
     backup_dir.mkdir(parents=True, exist_ok=True)
     out = backup_dir / f"nifi-flow-{group_id}-{time.strftime('%Y%m%d-%H%M%S')}.json"
@@ -1767,6 +1878,7 @@ def apply_group(api: NiFi, group_id: str, flow: Dict[str, Any], mode: str, renam
         "connection_routes": [],
         "before_audit": before,
         "route_issues": issues,
+        "topology_blockers": infer_topology_blockers(next_nodes, conns, issues),
         "processor_states_before": {},
         "processor_states_after": {},
         "state_preservation_issues": [],
@@ -1861,6 +1973,54 @@ def cmd_self_test() -> None:
     }
     before = route_report("root", cross_nodes, [horizontal, vertical], cross_routes)
     assert any(i["type"] == "segments_cross_segment" for i in before)
+    # Boundary-aware layout: a fallback processor on the left should be treated
+    # as a side handler and aligned with the lower processor it returns to.  This
+    # avoids a high side handler plus long stepped return route.
+    choose = Node("choose", "PROCESSOR", "choose", 240, 170)
+    build = Node("build", "PROCESSOR", "build", 240, 420)
+    extract = Node("extract", "PROCESSOR", "extract", 240, 670)
+    content = Node("content", "PROCESSOR", "content", 240, 920)
+    send = Node("send", "PROCESSOR", "send", 240, 1170)
+    fallback = Node("fallback", "PROCESSOR", "fallback", -420, 670)
+    fallback_nodes = {n.id: n for n in (choose, build, extract, content, send, fallback)}
+    fallback_conns = [
+        Conn("c_choose_build", "choose", "build", "PROCESSOR", "PROCESSOR", None, None, "choose", "build", ("normal",)),
+        Conn("c_build_extract", "build", "extract", "PROCESSOR", "PROCESSOR", None, None, "build", "extract", ("success",)),
+        Conn("c_extract_content", "extract", "content", "PROCESSOR", "PROCESSOR", None, None, "extract", "content", ("matched",)),
+        Conn("c_content_send", "content", "send", "PROCESSOR", "PROCESSOR", None, None, "content", "send", ("success",)),
+        Conn("c_choose_fallback", "choose", "fallback", "PROCESSOR", "PROCESSOR", None, None, "choose", "fallback", ("fallback",)),
+        Conn("c_fallback_send", "fallback", "send", "PROCESSOR", "PROCESSOR", None, None, "fallback", "send", ("success",)),
+    ]
+    fallback_targets = target_layout(fallback_nodes, fallback_conns)
+    assert fallback_targets["fallback"][0] < fallback_targets["send"][0]
+    assert abs(fallback_targets["fallback"][1] - fallback_targets["send"][1]) < 1.0
+    # Bottom boundary layout: dense failure outputs should stay local to the
+    # working area instead of inheriting a far-right historical coordinate.
+    fan_nodes = {
+        "main": Node("main", "PROCESSOR", "main", 240, 0),
+        "branch1": Node("branch1", "PROCESSOR", "branch1", 780, 260),
+        "branch2": Node("branch2", "PROCESSOR", "branch2", 1320, 260),
+        "branch3": Node("branch3", "PROCESSOR", "branch3", 1860, 260),
+        "done": Node("done", "OUTPUT_PORT", "done", -900, 1600),
+        "failure": Node("failure", "OUTPUT_PORT", "failure", 5600, 1600),
+    }
+    fan_conns = [
+        Conn("done_conn", "main", "done", "PROCESSOR", "OUTPUT_PORT", None, None, "main", "done", ("done",)),
+        Conn("fail_main", "main", "failure", "PROCESSOR", "OUTPUT_PORT", None, None, "main", "failure", ("failure",)),
+        Conn("fail_1", "branch1", "failure", "PROCESSOR", "OUTPUT_PORT", None, None, "branch1", "failure", ("failure",)),
+        Conn("fail_2", "branch2", "failure", "PROCESSOR", "OUTPUT_PORT", None, None, "branch2", "failure", ("failure",)),
+        Conn("fail_3", "branch3", "failure", "PROCESSOR", "OUTPUT_PORT", None, None, "branch3", "failure", ("failure",)),
+    ]
+    fan_targets = target_layout(fan_nodes, fan_conns)
+    processor_right = max(n.rect().right for n in fan_nodes.values() if n.kind == "PROCESSOR")
+    assert fan_targets["failure"][0] < processor_right + 720.0
+    assert fan_targets["failure"][1] > max(n.y for n in fan_nodes.values() if n.kind == "PROCESSOR")
+    blockers = infer_topology_blockers(
+        fan_nodes,
+        fan_conns,
+        [{"type": "segment_too_close_to_connection_label", "connection": "fail_1"}],
+    )
+    assert blockers and blockers[0]["kind"] == "dense_terminal_fanin_requires_topology_decision"
     print("self-test ok")
 
 def main() -> None:

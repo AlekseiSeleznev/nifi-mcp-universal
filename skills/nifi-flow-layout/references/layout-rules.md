@@ -18,6 +18,11 @@
 ## Layout
 
 - Prefer one main vertical spine.
+- Build a boundary-aware layered layout:
+  - input ports, source-only nodes, and manual trigger/source nodes are the top boundary;
+  - business processors/process groups are middle layers;
+  - output ports and terminal sink nodes are the bottom boundary;
+  - error, fallback, notification, and loop/back edges use side lanes.
 - Input port or start processor is at the top.
 - Output port or finish processor is at the bottom.
 - Final output ports are sinks, not intermediate blocks. If an output port has
@@ -26,6 +31,9 @@
   Do not leave a final output port between `Teams` and `Обслуживание`: it creates
   a fake loop instead of a readable finish.
 - Side-effect/error/log processors go to the right column.
+- Side-effect/fallback processors may also be on the left when that is the
+  natural local side; do not force all side work to the right if it creates a
+  long return route.
 - Keep the right column close enough to the main spine for short readable
   branches, but leave a real routing corridor between the main processors and
   the side processors. Do not push errors far away just to avoid crossings.
@@ -39,6 +47,12 @@
 - Do not leave large dead space unless it separates side branches from the main route.
 - Side columns must be dynamic. A single log/error branch should stay close to
   the main line; dense fan-in can reserve a wider corridor for labels and lanes.
+- Before drawing a long detour, try moving the source or destination node:
+  lower/raise the side processor, align it with the processor it returns to, or
+  move a terminal output closer to the local branch cluster.
+- Penalize huge empty canvas rectangles, far-away output sinks, long horizontal
+  buses across the whole canvas, and fan-in that could be localized by moving a
+  sink or side processor.
 
 ## Connections
 
@@ -56,6 +70,8 @@
   adding more bends.
 - Avoid giant “telephone wire” loops. A local side route is better than going
   far right/up/down and then coming back.
+- For cycles, keep the readable acyclic path top-to-bottom and route the back
+  edge in a local side lane with minimal length and no crossings.
 - A route must not visually touch a component edge except at its own arrowhead.
   If the label/segment lies flush against a processor, group, port, or queue
   label, treat it as an overlap and move the route to another side/lane.
@@ -74,6 +90,13 @@
   bus or several paths overlap before entering a log/error processor, route some
   branches through the opposite side or move the error processor closer to the
   source cluster.
+- Dense fan-in/fan-out must stay local when possible: sort sources by visible
+  order, assign independent source exit slots and target entry slots, choose the
+  nearest clear target side, and prefer a local comb/ladder over a far shared
+  highway.
+- A terminal sink with many incoming routes should be close to the last related
+  processors. Do not preserve a historical far-right/far-left output position
+  when a local bottom-boundary sink is readable.
 - Do not let a handler's outgoing route reuse the same short edge segment as
   incoming failure routes. A right-column handler returning to a lower main-lane
   processor should usually leave from the bottom first, then enter the lower
@@ -102,6 +125,9 @@ A flow is not finished until these checks are clean:
 - no connection label intersects a component or another label;
 - no long collinear path overlap between different connections;
 - screenshot is readable without guessing where a line goes.
+- reports explain unresolved visual blockers without private data. If a clean
+  result needs topology change, name the safe options: funnel, collector
+  processor, split sink, or separate process group.
 
 ## Apache NiFi UI geometry findings
 
@@ -155,7 +181,7 @@ Use these values from the current Apache NiFi frontend, not guessed screenshot s
   prefer the direct no-bend route instead of a scored dogleg that may run along
   or over the lower processor.
 - Lines must keep visible clearance, not merely avoid intersection: at the NiFi
-  browser zoom used for PUIG evidence, route segments need at least 12px visual
+  browser zoom used by the visual evidence workflow, route segments need at least 12px visual
   gap from other connection labels and component edges, and parallel route
   segments need at least 32px visual gap over meaningful lengths.
 - When labels are packed but a neighboring line still skims the label border,
