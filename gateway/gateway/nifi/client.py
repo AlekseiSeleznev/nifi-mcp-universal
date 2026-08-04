@@ -15,6 +15,7 @@ from tenacity import (
 )
 
 PROVENANCE_MAX_WINDOW_SECONDS = 24 * 60 * 60
+PROVENANCE_MAX_RESULTS = 1000
 PROVENANCE_POLL_TIMEOUT_SECONDS = 30.0
 PROVENANCE_POLL_INTERVAL_SECONDS = 0.5
 PROVENANCE_EVENT_TYPES = frozenset(
@@ -353,7 +354,7 @@ class NiFiClient:
 			return None
 		return {
 			"finished": True,
-			"total_count": total_count,
+			"total_count": min(total_count, PROVENANCE_MAX_RESULTS),
 			"error_count": len(errors),
 			"cleanup_status": "unknown",
 		}
@@ -380,6 +381,7 @@ class NiFiClient:
 			},
 			"startDate": self._format_provenance_timestamp(start_time),
 			"endDate": self._format_provenance_timestamp(end_time),
+			"maxResults": PROVENANCE_MAX_RESULTS,
 			"summarize": True,
 			"incrementalResults": False,
 		}

@@ -36,7 +36,7 @@ TOOLS: list[Tool] = [
     Tool(name="get_bulletins", description="Get recent bulletins/alerts (read-only).", inputSchema={"type": "object", "properties": {"after_ms": {"type": "integer", "description": "Only return bulletins after this timestamp (ms)"}}}),
     Tool(
         name="get_provenance_event_count",
-        description="Count provenance events for one component in a bounded time window (read-only, sanitized result).",
+        description="Count provenance events for one component in a bounded time window (read-only, sanitized result; capped at 1000).",
         inputSchema={
             "type": "object",
             "additionalProperties": False,

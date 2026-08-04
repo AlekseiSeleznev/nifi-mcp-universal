@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
-from gateway.nifi.client import NiFiClient, NiFiError
+from gateway.nifi.client import PROVENANCE_MAX_RESULTS, NiFiClient, NiFiError
 from gateway.tools import read_tools
 
 from gateway import mcp_server
@@ -179,6 +179,7 @@ def test_success_uses_exact_safe_filter_and_returns_no_raw_provenance():
                 },
                 "startDate": "08/04/2026 00:00:00.000 GMT+00:00",
                 "endDate": "08/04/2026 00:30:00.000 GMT+00:00",
+                "maxResults": 1000,
                 "summarize": True,
                 "incrementalResults": False,
             }
@@ -227,6 +228,21 @@ def test_success_without_optional_event_type_does_not_add_a_raw_filter():
 
     search_terms = session.post.call_args.kwargs["json"]["provenance"]["request"]["searchTerms"]
     assert search_terms == {"ProcessorID": {"value": "processor-1", "inverse": False}}
+
+
+def test_total_count_is_capped_at_the_bounded_max_results_limit():
+    session = MagicMock(spec=requests.Session)
+    session.headers = {}
+    session.post.return_value = _response(200, {"provenance": {"id": "query-capped"}})
+    session.get.return_value = _response(
+        200, {"provenance": {"finished": True, "results": {"totalCount": 5000, "errors": []}}}
+    )
+    session.delete.return_value = _response(200, {})
+
+    result = _client(session).get_provenance_event_count(**_arguments())
+
+    assert PROVENANCE_MAX_RESULTS == 1000
+    assert result["total_count"] == PROVENANCE_MAX_RESULTS
 
 
 def test_incomplete_polling_stays_unknown_until_a_later_finished_get():
