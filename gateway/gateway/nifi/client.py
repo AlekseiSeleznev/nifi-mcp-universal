@@ -318,7 +318,7 @@ class NiFiClient:
 			raise ValueError("provenance timezone offset must use minute precision")
 		offset_minutes = abs(offset_seconds) // 60
 		offset_sign = "+" if offset_seconds >= 0 else "-"
-		timezone = f"{offset_sign}{offset_minutes // 60:02d}:{offset_minutes % 60:02d}"
+		timezone = f"GMT{offset_sign}{offset_minutes // 60:02d}:{offset_minutes % 60:02d}"
 		date = f"{parsed.month:02d}/{parsed.day:02d}/{parsed.year:04d}"
 		return (
 			f"{date} {parsed:%H:%M:%S}.{parsed.microsecond // 1000:03d} "
