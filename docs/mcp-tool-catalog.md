@@ -1,6 +1,6 @@
 # MCP Tool Catalog
 
-Total tools: **66**.
+Total tools: **67**.
 
 Generated from `gateway/gateway/mcp_server.py` tool modules.
 Regenerate with: `python3 tools/generate_tool_catalog.py`.
@@ -16,7 +16,7 @@ Regenerate with: `python3 tools/generate_tool_catalog.py`.
 | `switch_nifi` | Switch the active NiFi connection for the current session. |
 | `test_nifi_connection` | Test connectivity to a NiFi instance without saving. |
 
-## `read_tools` (25)
+## `read_tools` (26)
 
 | Tool | Description |
 |------|-------------|
@@ -36,6 +36,7 @@ Regenerate with: `python3 tools/generate_tool_catalog.py`.
 | `get_processor_details` | Get detailed information about a specific processor. |
 | `get_processor_state` | Get just the state of a processor (RUNNING, STOPPED, DISABLED). |
 | `get_processor_types` | Get all available processor types (read-only). |
+| `get_provenance_event_count` | Count provenance events for one component in a bounded time window (read-only, sanitized result). |
 | `get_recommended_workflow` | Get recommended step-by-step workflow for building a specific flow. |
 | `get_root_process_group` | Return the root process group (read-only). |
 | `get_setup_instructions` | Get comprehensive setup instructions for NiFi MCP Server configuration. |

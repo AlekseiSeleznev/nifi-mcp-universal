@@ -463,6 +463,14 @@ async def test_handle_mcp_replaces_terminated_transport(monkeypatch):
     server_mod._transports.clear()
 
 
+def test_transport_termination_falls_back_to_private_state():
+    class LegacyTransport:
+        def _terminated(self):
+            return True
+
+    assert server_mod._transport_is_terminated(LegacyTransport()) is True
+
+
 @pytest.mark.asyncio
 async def test_dashboard_docs_and_dashboard_routes(monkeypatch):
     request = Request(_scope("/dashboard/docs"), _receive_once)

@@ -1,4 +1,4 @@
-mcp>=1.9.0
+mcp>=1.9.0,<2.0.0
 starlette>=0.41.0
 uvicorn>=0.32.0
 anyio>=4.6.0

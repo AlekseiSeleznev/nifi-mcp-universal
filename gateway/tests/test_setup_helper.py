@@ -67,6 +67,13 @@ class TestValidateCurrentConfig:
         auth_warnings = [w for w in warnings if "authentication" in w.lower() and "not" in w.lower()]
         assert len(auth_warnings) == 0
 
+    def test_check_report_covers_valid_no_authentication_branch(self, monkeypatch, capsys):
+        monkeypatch.setenv("NIFI_MCP_NIFI_API_BASE", "https://nifi.example.test/nifi-api")
+        monkeypatch.setattr(SetupGuide, "validate_current_config", staticmethod(lambda: (True, [], [])))
+
+        assert SetupGuide.check_and_report() is True
+        assert "Authentication: None" in capsys.readouterr().out
+
 
 class TestGetSetupInstructions:
     def test_returns_string(self):

@@ -10,6 +10,13 @@
 
 - **Триггер-фразы**: «NiFi / Apache NiFi / нифи», «используем NiFi `<имя>`», «работаем с NiFi `<имя>`», «подключись к NiFi `<имя>`», «в NiFi `<имя>`», «switch to NiFi `<name>`».
 - **NiFi-терминология**: processor (в dataflow-контексте), process group / PG, controller service, flowfile, bulletin, relationship, queue backlog, parameter context, provenance, имена процессоров (GetFile, PutFile, GenerateFlowFile, InvokeHTTP, ListenHTTP, ConsumeKafka).
+- **Provenance count:** для подсчёта используй `get_provenance_event_count`
+  только с `component_id`, bounded `start_time`/`end_time` и optional
+  allowlisted `event_type`. Он read-only, не принимает raw search и отдаёт
+  только sanitized counts/status; события, атрибуты, filenames, URLs,
+  content, lineage и raw errors запрещены. Требуются API `Read /provenance`,
+  global `query provenance` и component `view provenance`; детали — в
+  [docs/provenance-event-count.md](docs/provenance-event-count.md).
 - **Типовые имена регистраций**: `prod-nifi`, `dev-nifi`, `<env>-nifi`, `nifi-<cluster>`. URL NiFi обычно заканчивается на `/nifi-api` (порты 8080/9443).
 - **Когда пользователь назвал инстанс**: `list_nifi_connections` → если есть, `switch_nifi`; иначе попросить URL + auth и `connect_nifi` (по умолчанию `readonly=true`).
 - **«X» без указания системы** — `list_nifi_connections` здесь; если есть — работаем, если нет — честно сказать «в NiFi-MCP такой регистрации нет» и попросить уточнение. Не выдумывать.

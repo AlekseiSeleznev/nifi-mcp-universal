@@ -1,10 +1,46 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple, List
+import re
+import time
+from datetime import datetime
 from functools import lru_cache
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+	retry,
+	retry_if_exception_type,
+	stop_after_attempt,
+	wait_exponential,
+)
+
+PROVENANCE_MAX_WINDOW_SECONDS = 24 * 60 * 60
+PROVENANCE_POLL_TIMEOUT_SECONDS = 30.0
+PROVENANCE_POLL_INTERVAL_SECONDS = 0.5
+PROVENANCE_EVENT_TYPES = frozenset(
+	{
+		"ADDINFO",
+		"ATTRIBUTES_MODIFIED",
+		"CLONE",
+		"CONTENT_MODIFIED",
+		"CREATE",
+		"DOWNLOAD",
+		"DROP",
+		"EXPIRE",
+		"FETCH",
+		"FORK",
+		"JOIN",
+		"RECEIVE",
+		"REMOTE_INVOCATION",
+		"REPLAY",
+		"ROUTE",
+		"SEND",
+		"UNKNOWN",
+		"UPLOAD",
+	}
+)
+_SAFE_PROVENANCE_COMPONENT_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
+_SAFE_PROVENANCE_QUERY_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,255}")
 
 
 class NiFiError(Exception):
@@ -110,6 +146,48 @@ class NiFiClient:
 			)
 		return resp.json() if resp.content else {}
 
+	def _request_json_once(
+		self,
+		method: str,
+		path: str,
+		params: Optional[Dict[str, Any]] = None,
+		data: Optional[Dict[str, Any]] = None,
+	) -> Dict[str, Any]:
+		"""Perform one JSON request without retrying or retaining response text.
+
+		Provenance queries are asynchronous resources. Their submit, poll and
+		cleanup calls must each represent one deliberate HTTP attempt so a
+		transport retry cannot create a second query or hide cleanup uncertainty.
+		"""
+		request = getattr(self.session, method.lower())
+		kwargs: Dict[str, Any] = {"params": params, "timeout": self.timeout}
+		if data is not None:
+			kwargs["json"] = data
+		resp = request(self._url(path), **kwargs)
+		if not resp.ok:
+			raise NiFiError(f"{method} {path} failed: {resp.reason}", status_code=resp.status_code)
+		if not resp.content:
+			return {}
+		try:
+			payload = resp.json()
+		except (TypeError, ValueError) as exc:
+			raise NiFiError(f"{method} {path} returned invalid JSON", status_code=resp.status_code) from exc
+		if not isinstance(payload, dict):
+			raise NiFiError(f"{method} {path} returned an invalid response shape", status_code=resp.status_code)
+		return payload
+
+	def _get_once(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+		"""Perform one GET attempt without tenacity retry."""
+		return self._request_json_once("GET", path, params=params)
+
+	def _post_once(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+		"""Perform one POST attempt without tenacity retry."""
+		return self._request_json_once("POST", path, data=data)
+
+	def _delete_once(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+		"""Perform one DELETE attempt without tenacity retry."""
+		return self._request_json_once("DELETE", path, params=params)
+
 	def get_version_info(self) -> Dict[str, Any]:
 		"""Get NiFi version and build information."""
 		return self._get("flow/about")
@@ -187,6 +265,141 @@ class NiFiClient:
 	def get_bulletins(self, since_ms: Optional[int] = None) -> Dict[str, Any]:
 		params = {"after": since_ms} if since_ms else None
 		return self._get("flow/bulletin-board", params=params)
+
+	@staticmethod
+	def _validate_provenance_event_count_inputs(
+		component_id: str,
+		start_time: str,
+		end_time: str,
+		event_type: Optional[str],
+	) -> None:
+		if not isinstance(component_id, str) or not _SAFE_PROVENANCE_COMPONENT_ID.fullmatch(component_id):
+			raise ValueError("component_id must be a bounded NiFi component identifier")
+		if not isinstance(start_time, str) or not isinstance(end_time, str):
+			raise ValueError("start_time and end_time must be ISO-8601 strings")
+
+		def parse_timestamp(value: str) -> datetime:
+			if len(value) > 64:
+				raise ValueError("provenance time is too long")
+			try:
+				parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+			except ValueError as exc:
+				raise ValueError("provenance time must be ISO-8601") from exc
+			if parsed.tzinfo is None or parsed.utcoffset() is None:
+				raise ValueError("provenance time must include a timezone")
+			return parsed
+
+		start = parse_timestamp(start_time)
+		end = parse_timestamp(end_time)
+		window_seconds = (end - start).total_seconds()
+		if window_seconds <= 0 or window_seconds > PROVENANCE_MAX_WINDOW_SECONDS:
+			raise ValueError("provenance time window must be positive and bounded")
+		if event_type is not None and (not isinstance(event_type, str) or event_type not in PROVENANCE_EVENT_TYPES):
+			raise ValueError("event_type is not a supported NiFi provenance event type")
+
+	@staticmethod
+	def _provenance_unknown(cleanup_status: str = "not_attempted") -> Dict[str, Any]:
+		return {
+			"finished": False,
+			"total_count": None,
+			"error_count": None,
+			"cleanup_status": cleanup_status,
+		}
+
+	@staticmethod
+	def _safe_provenance_query_id(query_id: Any) -> bool:
+		return isinstance(query_id, str) and _SAFE_PROVENANCE_QUERY_ID.fullmatch(query_id) is not None
+
+	@staticmethod
+	def _summarize_provenance_result(provenance: Any) -> Optional[Dict[str, Any]]:
+		if not isinstance(provenance, dict) or provenance.get("finished") is not True:
+			return None
+		results = provenance.get("results")
+		if not isinstance(results, dict):
+			return None
+		total_count = results.get("totalCount")
+		if isinstance(total_count, bool) or not isinstance(total_count, int) or total_count < 0:
+			return None
+		errors = results.get("errors", [])
+		if not isinstance(errors, list):
+			return None
+		return {
+			"finished": True,
+			"total_count": total_count,
+			"error_count": len(errors),
+			"cleanup_status": "unknown",
+		}
+
+	def get_provenance_event_count(
+		self,
+		component_id: str,
+		start_time: str,
+		end_time: str,
+		event_type: Optional[str] = None,
+		*,
+		poll_timeout_seconds: float = PROVENANCE_POLL_TIMEOUT_SECONDS,
+		poll_interval_seconds: float = PROVENANCE_POLL_INTERVAL_SECONDS,
+	) -> Dict[str, Any]:
+		"""Return a sanitized count from one bounded asynchronous provenance query.
+
+		Only the component id, bounded time window and optional event type are
+		accepted. The NiFi query id is used internally and is never returned.
+		"""
+		self._validate_provenance_event_count_inputs(component_id, start_time, end_time, event_type)
+		request: Dict[str, Any] = {
+			"searchTerms": {
+				"ProcessorID": {"value": component_id, "inverse": False},
+			},
+			"startDate": start_time,
+			"endDate": end_time,
+			"summarize": True,
+			"incrementalResults": False,
+		}
+		if event_type is not None:
+			request["searchTerms"]["EventType"] = {"value": event_type, "inverse": False}
+
+		try:
+			submission = self._post_once("provenance", {"provenance": {"request": request}})
+		except Exception:
+			return self._provenance_unknown()
+
+		provenance = submission.get("provenance")
+		query_id = provenance.get("id") if isinstance(provenance, dict) else None
+		if not self._safe_provenance_query_id(query_id):
+			return self._provenance_unknown("unknown")
+
+		result = self._provenance_unknown()
+		try:
+			deadline = time.monotonic() + max(0.0, float(poll_timeout_seconds))
+			while True:
+				status = self._get_once(f"provenance/{query_id}")
+				provenance_status = status.get("provenance")
+				finished_result = self._summarize_provenance_result(provenance_status)
+				if isinstance(provenance_status, dict) and provenance_status.get("finished") is True:
+					result = finished_result or self._provenance_unknown()
+					break
+
+				now = time.monotonic()
+				if now >= deadline:
+					break
+				time.sleep(min(max(0.0, float(poll_interval_seconds)), deadline - now))
+		except Exception:
+			result = self._provenance_unknown()
+		finally:
+			try:
+				self._delete_once(f"provenance/{query_id}")
+				cleanup_status = "success"
+			except NiFiError as exc:
+				cleanup_status = "failure" if exc.status_code is not None else "unknown"
+			except (requests.ConnectionError, requests.Timeout):
+				cleanup_status = "unknown"
+			except Exception:
+				cleanup_status = "unknown"
+			if cleanup_status != "success":
+				result = self._provenance_unknown(cleanup_status)
+			else:
+				result["cleanup_status"] = cleanup_status
+		return result
 
 	def list_parameter_contexts(self) -> Dict[str, Any]:
 		"""List parameter contexts (both 1.x and 2.x, schema may differ slightly)."""

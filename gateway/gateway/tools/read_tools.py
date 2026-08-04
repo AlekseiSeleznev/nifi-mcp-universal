@@ -1,4 +1,4 @@
-"""25 read-only NiFi MCP tools."""
+"""26 read-only NiFi MCP tools."""
 
 from __future__ import annotations
 
@@ -34,6 +34,43 @@ TOOLS: list[Tool] = [
     Tool(name="list_processors", description="List processors in a process group (read-only).", inputSchema={"type": "object", "properties": {"process_group_id": {"type": "string", "description": "Process group ID"}}, "required": ["process_group_id"]}),
     Tool(name="list_connections", description="List connections in a process group (read-only).", inputSchema={"type": "object", "properties": {"process_group_id": {"type": "string", "description": "Process group ID"}}, "required": ["process_group_id"]}),
     Tool(name="get_bulletins", description="Get recent bulletins/alerts (read-only).", inputSchema={"type": "object", "properties": {"after_ms": {"type": "integer", "description": "Only return bulletins after this timestamp (ms)"}}}),
+    Tool(
+        name="get_provenance_event_count",
+        description="Count provenance events for one component in a bounded time window (read-only, sanitized result).",
+        inputSchema={
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "component_id": {"type": "string", "minLength": 1, "maxLength": 128},
+                "start_time": {"type": "string", "format": "date-time"},
+                "end_time": {"type": "string", "format": "date-time"},
+                "event_type": {
+                    "type": "string",
+                    "enum": [
+                        "ADDINFO",
+                        "ATTRIBUTES_MODIFIED",
+                        "CLONE",
+                        "CONTENT_MODIFIED",
+                        "CREATE",
+                        "DOWNLOAD",
+                        "DROP",
+                        "EXPIRE",
+                        "FETCH",
+                        "FORK",
+                        "JOIN",
+                        "RECEIVE",
+                        "REMOTE_INVOCATION",
+                        "REPLAY",
+                        "ROUTE",
+                        "SEND",
+                        "UNKNOWN",
+                        "UPLOAD",
+                    ],
+                },
+            },
+            "required": ["component_id", "start_time", "end_time"],
+        },
+    ),
     Tool(name="list_parameter_contexts", description="List all parameter contexts (read-only).", inputSchema={"type": "object", "properties": {}}),
     Tool(name="get_controller_services", description="Get controller services. If process_group_id is omitted, returns controller-level services.", inputSchema={"type": "object", "properties": {"process_group_id": {"type": "string", "description": "Process group ID (optional)"}}}),
     Tool(name="get_processor_types", description="Get all available processor types (read-only).", inputSchema={"type": "object", "properties": {}}),

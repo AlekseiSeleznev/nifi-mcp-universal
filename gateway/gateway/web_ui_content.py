@@ -903,7 +903,7 @@ DOCS_HTML = {
 <ul>
 <li>Multi-NiFi — подключение к нескольким NiFi инстансам одновременно</li>
 <li>Per-session routing — каждая сессия работает со своим NiFi</li>
-<li>66 MCP tools — управление, мониторинг, потоки, сервисы</li>
+<li>67 MCP tools — управление, мониторинг, потоки, сервисы</li>
 <li>Dashboard — веб-интерфейс с загрузкой сертификатов</li>
 <li>Docker — запуск одной командой</li>
 <li>NiFi 1.x и 2.x — автоматическое определение версии</li>
@@ -1026,7 +1026,7 @@ codex mcp get nifi-universal --json</code></pre>
 <ul>
 <li>Multi-NiFi — connect to multiple NiFi instances simultaneously</li>
 <li>Per-session routing — each session works with its own NiFi</li>
-<li>66 MCP tools — management, monitoring, flows, services</li>
+<li>67 MCP tools — management, monitoring, flows, services</li>
 <li>Dashboard — web UI with certificate upload</li>
 <li>Docker — single command deployment</li>
 <li>NiFi 1.x and 2.x — automatic version detection</li>

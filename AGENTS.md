@@ -161,6 +161,13 @@ docker image rm nifi-mcp-gateway 2>/dev/null || true
 - **Все NiFi-задачи — через MCP `nifi-mcp-universal`** (`http://localhost:8085/mcp`). Не гадать REST-пути и имена свойств.
 - **Pre-flight:** `list_nifi_connections` → если пусто, `connect_nifi` с `readonly=true` → `test_nifi_connection` → `get_root_process_group`.
 - **Safe update:** всегда сначала `get_*_details` для взятия `version` (оптимистическая блокировка NiFi API).
+- **Provenance count:** для безопасного подсчёта используй только
+  `get_provenance_event_count` с `component_id`, обязательным bounded
+  `start_time`/`end_time` и, при необходимости, allowlisted `event_type`.
+  Инструмент работает на `readonly=true`, сам завершает async query и наружу
+  отдаёт только `finished`, counts и `cleanup_status`; события, атрибуты,
+  filenames, URLs, content, lineage и raw errors запрещены. Policies: API
+  `Read /provenance`, global `query provenance` и component `view provenance`.
 - **Создание компонентов:** сначала тип (`get_processor_types`, `find_controller_services_by_type`), потом `create_*`.
 - **Опасные операции** (`delete_*`, `empty_connection_queue`, `*_all_processors_in_group`) — ТОЛЬКО после явного «да» пользователя.
 - **Fallback запрещён:** если backend недоступен или соединение не зарегистрировано — сообщить пользователю, не писать HTTP-вызовы руками.

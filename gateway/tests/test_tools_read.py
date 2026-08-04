@@ -1,4 +1,4 @@
-"""Tests for gateway.tools.read_tools — all 25 read-only tools."""
+"""Tests for gateway.tools.read_tools — all 26 read-only tools."""
 from __future__ import annotations
 
 import json
