@@ -19,9 +19,9 @@ END = "2026-08-04T00:30:00Z"
 @pytest.mark.parametrize(
 	("public_timestamp", "nifi_timestamp"),
 	[
-		("2026-08-04T00:30:00Z", "08/04/2026 00:30:00.000 +00:00"),
-		("2026-08-04T03:30:00+03:00", "08/04/2026 03:30:00.000 +03:00"),
-		("2026-08-04T00:30:00.123000-04:30", "08/04/2026 00:30:00.123 -04:30"),
+		("2026-08-04T00:30:00Z", "08/04/2026 00:30:00.000 GMT+00:00"),
+		("2026-08-04T03:30:00+03:00", "08/04/2026 03:30:00.000 GMT+03:00"),
+		("2026-08-04T00:30:00.123000-04:30", "08/04/2026 00:30:00.123 GMT-04:30"),
 	],
 )
 def test_public_provenance_timestamp_is_transformed_to_exact_nifi_format(public_timestamp, nifi_timestamp):
@@ -177,8 +177,8 @@ def test_success_uses_exact_safe_filter_and_returns_no_raw_provenance():
                     "ProcessorID": {"value": "processor-1", "inverse": False},
                     "EventType": {"value": "RECEIVE", "inverse": False},
                 },
-                "startDate": "08/04/2026 00:00:00.000 +00:00",
-                "endDate": "08/04/2026 00:30:00.000 +00:00",
+                "startDate": "08/04/2026 00:00:00.000 GMT+00:00",
+                "endDate": "08/04/2026 00:30:00.000 GMT+00:00",
                 "summarize": True,
                 "incrementalResults": False,
             }
@@ -209,8 +209,8 @@ def test_offset_timestamp_is_sent_through_public_query_request_without_changing_
     )
 
     request = session.post.call_args.kwargs["json"]["provenance"]["request"]
-    assert request["startDate"] == "08/04/2026 03:30:00.000 +03:00"
-    assert request["endDate"] == "08/04/2026 04:00:00.000 +03:00"
+    assert request["startDate"] == "08/04/2026 03:30:00.000 GMT+03:00"
+    assert request["endDate"] == "08/04/2026 04:00:00.000 GMT+03:00"
 
 
 def test_success_without_optional_event_type_does_not_add_a_raw_filter():
