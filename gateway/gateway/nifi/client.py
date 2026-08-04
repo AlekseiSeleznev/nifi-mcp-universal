@@ -44,6 +44,11 @@ _SAFE_PROVENANCE_COMPONENT_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 _SAFE_PROVENANCE_QUERY_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,255}")
 
 
+def _has_nonzero_fractional_second(value: str) -> bool:
+	match = re.search(r"\d{2}(?::?\d{2})?(?::?\d{2})?[.,](\d+)", value)
+	return match is not None and any(digit != "0" for digit in match.group(1))
+
+
 class NiFiError(Exception):
 	"""Base exception for NiFi API errors with detailed error information."""
 	def __init__(self, message: str, status_code: Optional[int] = None, response_body: Optional[str] = None):
@@ -282,14 +287,14 @@ class NiFiClient:
 		def parse_timestamp(value: str) -> datetime:
 			if len(value) > 64:
 				raise ValueError("provenance time is too long")
+			if _has_nonzero_fractional_second(value):
+				raise ValueError("provenance time must use whole-second precision")
 			try:
 				parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
 			except ValueError as exc:
 				raise ValueError("provenance time must be ISO-8601") from exc
 			if parsed.tzinfo is None or parsed.utcoffset() is None:
 				raise ValueError("provenance time must include a timezone")
-			if parsed.microsecond % 1000 != 0:
-				raise ValueError("provenance time must use millisecond precision")
 			return parsed
 
 		start = parse_timestamp(start_time)
@@ -304,16 +309,17 @@ class NiFiClient:
 	def _format_provenance_timestamp(value: str) -> str:
 		"""Convert the public ISO timestamp to NiFi's zoned date format.
 
-		NiFi 2.x expects ``MM/dd/yyyy HH:mm:ss.SSS GMT±HH:MM`` for provenance
+		NiFi 2.x expects ``MM/dd/yyyy HH:mm:ss GMT±HH:MM`` for provenance
 		requests. Keeping the input offset in the formatted value preserves the
-		instant without requiring a live server timezone lookup.
+		instant without requiring a live server timezone lookup. Non-zero
+		fractional seconds are rejected rather than silently truncated.
 		"""
+		if _has_nonzero_fractional_second(value):
+			raise ValueError("provenance time must use whole-second precision")
 		parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
 		offset = parsed.utcoffset()
 		if parsed.tzinfo is None or offset is None:
 			raise ValueError("provenance time must include a timezone")
-		if parsed.microsecond % 1000 != 0:
-			raise ValueError("provenance time must use millisecond precision")
 		offset_seconds = int(offset.total_seconds())
 		if offset_seconds % 60 != 0:
 			raise ValueError("provenance timezone offset must use minute precision")
@@ -321,10 +327,7 @@ class NiFiClient:
 		offset_sign = "+" if offset_seconds >= 0 else "-"
 		timezone = f"GMT{offset_sign}{offset_minutes // 60:02d}:{offset_minutes % 60:02d}"
 		date = f"{parsed.month:02d}/{parsed.day:02d}/{parsed.year:04d}"
-		return (
-			f"{date} {parsed:%H:%M:%S}.{parsed.microsecond // 1000:03d} "
-			f"{timezone}"
-		)
+		return f"{date} {parsed:%H:%M:%S} {timezone}"
 
 	@staticmethod
 	def _provenance_unknown(cleanup_status: str = "not_attempted") -> Dict[str, Any]:

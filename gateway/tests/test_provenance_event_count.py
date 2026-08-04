@@ -19,9 +19,9 @@ END = "2026-08-04T00:30:00Z"
 @pytest.mark.parametrize(
 	("public_timestamp", "nifi_timestamp"),
 	[
-		("2026-08-04T00:30:00Z", "08/04/2026 00:30:00.000 GMT+00:00"),
-		("2026-08-04T03:30:00+03:00", "08/04/2026 03:30:00.000 GMT+03:00"),
-		("2026-08-04T00:30:00.123000-05:30", "08/04/2026 00:30:00.123 GMT-05:30"),
+		("2026-08-04T00:30:00Z", "08/04/2026 00:30:00 GMT+00:00"),
+		("2026-08-04T03:30:00+03:00", "08/04/2026 03:30:00 GMT+03:00"),
+		("2026-08-04T00:30:00.000000-05:30", "08/04/2026 00:30:00 GMT-05:30"),
 	],
 )
 def test_public_provenance_timestamp_is_transformed_to_exact_nifi_format(public_timestamp, nifi_timestamp):
@@ -38,9 +38,28 @@ def test_timestamp_formatter_rejects_second_precision_offset():
 		NiFiClient._format_provenance_timestamp("2026-08-04T00:30:00+03:00:30")
 
 
-def test_timestamp_formatter_rejects_submillisecond_precision():
-	with pytest.raises(ValueError, match="millisecond precision"):
-		NiFiClient._format_provenance_timestamp("2026-08-04T00:30:00.123456Z")
+@pytest.mark.parametrize(
+	"timestamp",
+	[
+		"2026-08-04T00:30:00.001Z",
+		"2026-08-04T00:30:00.123456Z",
+		"2026-08-04T00:30:00.0000001Z",
+		"20260804T003000.0000001Z",
+		"2026-08-04T003000.0000001Z",
+		"20260804T00:30:00.0000001Z",
+		"2026-W32-1T00:30:00.0000001Z",
+		"2026W321T003000.0000001Z",
+		"2026-08-04T00:30.0000001Z",
+		"20260804T0030.0000001Z",
+		"2026-08-04T00.0000001Z",
+		"20260804T00.0000001Z",
+		"2026-W32-1T00.0000001Z",
+		"2026W321T00.0000001Z",
+	],
+)
+def test_timestamp_formatter_rejects_nonzero_fractional_seconds(timestamp):
+	with pytest.raises(ValueError, match="whole-second precision"):
+		NiFiClient._format_provenance_timestamp(timestamp)
 
 
 def _response(status_code: int, payload: dict | None = None):
@@ -177,8 +196,8 @@ def test_success_uses_exact_safe_filter_and_returns_no_raw_provenance():
                     "ProcessorID": {"value": "processor-1", "inverse": False},
                     "EventType": {"value": "RECEIVE", "inverse": False},
                 },
-                "startDate": "08/04/2026 00:00:00.000 GMT+00:00",
-                "endDate": "08/04/2026 00:30:00.000 GMT+00:00",
+                "startDate": "08/04/2026 00:00:00 GMT+00:00",
+                "endDate": "08/04/2026 00:30:00 GMT+00:00",
                 "maxResults": 1000,
                 "summarize": True,
                 "incrementalResults": False,
@@ -210,8 +229,8 @@ def test_offset_timestamp_is_sent_through_public_query_request_without_changing_
     )
 
     request = session.post.call_args.kwargs["json"]["provenance"]["request"]
-    assert request["startDate"] == "08/04/2026 03:30:00.000 GMT+03:00"
-    assert request["endDate"] == "08/04/2026 04:00:00.000 GMT+03:00"
+    assert request["startDate"] == "08/04/2026 03:30:00 GMT+03:00"
+    assert request["endDate"] == "08/04/2026 04:00:00 GMT+03:00"
 
 
 def test_success_without_optional_event_type_does_not_add_a_raw_filter():
@@ -386,13 +405,33 @@ def test_single_attempt_json_helper_rejects_empty_invalid_and_non_object_respons
 
 @pytest.mark.parametrize(
     "start_time",
-    [None, "x" * 65, "not-a-timestamp", "2026-08-04T00:00:00.000001Z"],
+    [
+        None,
+        "x" * 65,
+        "not-a-timestamp",
+        "2026-08-04T00:00:00.000001Z",
+        "2026-08-04T00:00:00.001Z",
+        "2026-08-04T00:00:00.0000001Z",
+        "20260804T000000.0000001Z",
+        "2026-08-04T000000.0000001Z",
+        "20260804T00:00:00.0000001Z",
+        "2026-W32-1T00:00:00.0000001Z",
+        "2026W321T000000.0000001Z",
+        "2026-08-04T00:00.0000001Z",
+        "20260804T0000.0000001Z",
+        "2026-08-04T00.0000001Z",
+        "20260804T00.0000001Z",
+        "2026-W32-1T00.0000001Z",
+        "2026W321T00.0000001Z",
+    ],
 )
 def test_client_validation_rejects_non_string_long_and_malformed_timestamps(start_time):
-    client = _client(MagicMock(spec=requests.Session))
+    session = MagicMock(spec=requests.Session)
+    client = _client(session)
 
     with pytest.raises(ValueError):
         client.get_provenance_event_count("processor-1", start_time, END)
+    session.post.assert_not_called()
 
 
 def test_invalid_query_id_is_unknown_without_poll_or_cleanup():
