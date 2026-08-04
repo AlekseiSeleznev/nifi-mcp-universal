@@ -58,7 +58,7 @@ class TestDashboardDocs:
             client = TestClient(app)
             resp = client.get("/dashboard/docs?lang=ru")
         assert resp.status_code == 200
-        assert "66 MCP tools" in resp.text
+        assert "67 MCP tools" in resp.text
         assert "http://localhost:8085/dashboard" in resp.text
         assert "http://localhost:8085/mcp" in resp.text
         assert "docs/mcp-tool-catalog.md" in resp.text
@@ -77,7 +77,7 @@ class TestDashboardDocs:
             client = TestClient(app)
             resp = client.get("/dashboard/docs?lang=en")
         assert resp.status_code == 200
-        assert "66 MCP tools" in resp.text
+        assert "67 MCP tools" in resp.text
         assert "http://localhost:8085/dashboard" in resp.text
         assert "http://localhost:8085/mcp" in resp.text
         assert "docs/mcp-tool-catalog.md" in resp.text

@@ -69,7 +69,16 @@ Read / inspect flow:
   list_processors, list_connections, list_input_ports, list_output_ports,
   get_processor_details (capture `version` for later safe updates!),
   check_connection_queue, get_bulletins, get_flow_health_status,
-  get_flow_summary, search_flow.
+  get_flow_summary, search_flow, get_provenance_event_count.
+
+For provenance counts, use only get_provenance_event_count with a component id
+and a bounded start/end time window (optionally one event type). It is
+read-only even on readonly connections, performs a bounded asynchronous
+provenance query cleanup, and returns only sanitized counts/status booleans.
+Do not request or expose provenance events, attributes, filenames, URLs,
+content, lineage, replay data, or raw errors. The NiFi caller needs Read
+/provenance, query provenance, and component view provenance policies;
+view-the-data is not required for this count-only tool.
 
 Before writing (readonly=false must be set on the connection):
   • Creating a processor: get_processor_types first, then create_processor.

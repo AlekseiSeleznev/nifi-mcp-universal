@@ -48,6 +48,12 @@ def test_ci_workflow_uses_smoke_scripts():
     assert "--cov-fail-under=100" in ci_workflow
 
 
+def test_mcp_sdk_requirement_keeps_supported_1x_contract():
+    requirements = (_repo_root() / "gateway" / "requirements.txt").read_text(encoding="utf-8")
+    assert "mcp>=1.9.0,<2.0.0" in requirements.splitlines()
+    assert "mcp>=1.9.0\n" not in requirements
+
+
 def test_dashboard_module_split_assets_exist():
     repo = _repo_root()
     web_ui = repo / "gateway" / "gateway" / "web_ui.py"

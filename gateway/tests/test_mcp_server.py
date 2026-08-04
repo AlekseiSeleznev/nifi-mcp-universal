@@ -70,6 +70,21 @@ class TestListTools:
         assert len(names) == len(set(names)), "Duplicate tool names detected"
 
 
+@pytest.mark.asyncio
+async def test_prompt_handlers_format_missing_arguments_and_reject_unknown_prompt():
+    prompts = await mcp_mod.list_prompts()
+    assert prompts
+
+    formatted = await mcp_mod.get_prompt("build_flow_from_request", {"request": "route files"})
+    assert formatted.messages[0].content.text.startswith("Design a flow for: route files")
+
+    fallback = await mcp_mod.get_prompt("build_flow_from_request", {})
+    assert "Design a flow for: {request}" in fallback.messages[0].content.text
+
+    with pytest.raises(ValueError, match="Unknown prompt"):
+        await mcp_mod.get_prompt("missing", {})
+
+
 # ──────────────────────────────────────────────
 #  call_tool dispatch
 # ──────────────────────────────────────────────

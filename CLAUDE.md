@@ -20,6 +20,14 @@
 **NiFi-терминология — любой маркер ниже → этот MCP:**
 processor (в dataflow-контексте), process group / PG, controller service, flowfile, bulletin, relationship, queue backlog, parameter context, provenance, имена процессоров (GetFile, PutFile, GenerateFlowFile, InvokeHTTP, ListenHTTP, ConsumeKafka).
 
+Для bounded подсчёта provenance используй `get_provenance_event_count` с
+`component_id`, обязательными `start_time`/`end_time` и optional allowlisted
+`event_type`. Он работает на readonly-соединении, возвращает только
+sanitized counts/status и запрещает события, атрибуты, filenames, URLs,
+content, lineage и raw errors. Требуются API `Read /provenance`, global
+`query provenance` и component `view provenance`; подробности — в
+[docs/provenance-event-count.md](docs/provenance-event-count.md).
+
 **Типовые имена регистраций:** `prod-nifi`, `dev-nifi`, `<env>-nifi`, `nifi-<cluster>`. URL NiFi обычно заканчивается на `/nifi-api` (порты 8080/9443).
 
 **Что делать, когда пользователь назвал инстанс** («используем NiFi prod»):
@@ -70,7 +78,7 @@ processor (в dataflow-контексте), process group / PG, controller servi
 | Категория | Инструменты |
 |---|---|
 | Соединения | `connect_nifi`, `disconnect_nifi`, `switch_nifi`, `list_nifi_connections`, `test_nifi_connection`, `get_server_status` |
-| Чтение | `get_nifi_version`, `get_root_process_group`, `list_processors`, `list_connections`, `list_input_ports`, `list_output_ports`, `get_bulletins`, `list_parameter_contexts`, `get_parameter_context_details`, `get_controller_services`, `find_controller_services_by_type`, `get_controller_service_details`, `get_processor_types`, `get_processor_details`, `get_processor_state`, `get_connection_details`, `check_connection_queue`, `search_flow`, `get_flow_summary`, `get_flow_health_status`, `analyze_flow_build_request`, `get_setup_instructions`, `check_configuration`, `get_best_practices_guide`, `get_recommended_workflow` |
+| Чтение | `get_nifi_version`, `get_root_process_group`, `list_processors`, `list_connections`, `list_input_ports`, `list_output_ports`, `get_bulletins`, `get_provenance_event_count`, `list_parameter_contexts`, `get_parameter_context_details`, `get_controller_services`, `find_controller_services_by_type`, `get_controller_service_details`, `get_processor_types`, `get_processor_details`, `get_processor_state`, `get_connection_details`, `check_connection_queue`, `search_flow`, `get_flow_summary`, `get_flow_health_status`, `analyze_flow_build_request`, `get_setup_instructions`, `check_configuration`, `get_best_practices_guide`, `get_recommended_workflow` |
 | Процессоры | `start_processor`, `stop_processor`, `create_processor`, `update_processor_config`, `delete_processor`, `terminate_processor` |
 | Групповые операции | `start_all_processors_in_group`, `stop_all_processors_in_group`, `enable_all_controller_services_in_group` |
 | Соединения (связи) | `create_connection`, `delete_connection`, `empty_connection_queue` |

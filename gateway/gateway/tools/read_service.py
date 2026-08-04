@@ -60,6 +60,25 @@ async def dispatch_read_tool(
     if name == "get_bulletins":
         return ReadDispatchResult("json", await _call_client(client, "get_bulletins", arguments.get("after_ms")), redact=True)
 
+    if name == "get_provenance_event_count":
+        allowed = {"component_id", "start_time", "end_time", "event_type"}
+        if set(arguments) - allowed:
+            raise ValueError("unsupported provenance event-count argument")
+        component_id = arguments["component_id"]
+        start_time = arguments["start_time"]
+        end_time = arguments["end_time"]
+        event_type = arguments.get("event_type")
+        NiFiClient._validate_provenance_event_count_inputs(component_id, start_time, end_time, event_type)
+        payload = await _call_client(
+            client,
+            "get_provenance_event_count",
+            component_id,
+            start_time,
+            end_time,
+            event_type,
+        )
+        return ReadDispatchResult("json", payload)
+
     if name == "list_parameter_contexts":
         return ReadDispatchResult("json", await _call_client(client, "list_parameter_contexts"), redact=True)
 
