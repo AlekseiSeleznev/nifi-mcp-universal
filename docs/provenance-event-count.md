@@ -37,12 +37,13 @@ POST/GET/DELETE этого lifecycle не используют автомати�
 ограничивается `1000` (NiFi представляет такой результат как `1000+`), и
 инструмент не обещает точное значение выше этого лимита.
 
-Публичные `start_time` и `end_time` остаются ISO-8601 с timezone и точностью не
-выше миллисекунд. Перед POST gateway переводит каждый timestamp в формат NiFi 2.x
-`MM/dd/yyyy HH:mm:ss.SSS GMT±HH:MM`, сохраняя исходный offset и абсолютный
-момент времени; значения с sub-millisecond точностью отклоняются fail-closed,
-чтобы не отправлять изменённую границу. Каждый status GET явно передаёт
-`summarize=true` и `incrementalResults=false`, как это делает интерфейс NiFi 2.8.
+Публичные `start_time` и `end_time` остаются ISO-8601 с timezone. Для NiFi 2.8
+gateway принимает только whole-second timestamps: явное `.000` допустимо, но
+любая ненулевая fractional second отклоняется fail-closed до HTTP, без тихого
+усечения значимой границы. Перед POST каждый timestamp переводится в формат
+NiFi 2.x `MM/dd/yyyy HH:mm:ss GMT±HH:MM`, сохраняя исходный offset и абсолютный
+момент времени. Каждый status GET явно передаёт `summarize=true` и
+`incrementalResults=false`, как это делает интерфейс NiFi 2.8.
 
 ## Результат и fail-closed
 
