@@ -287,6 +287,8 @@ class NiFiClient:
 				raise ValueError("provenance time must be ISO-8601") from exc
 			if parsed.tzinfo is None or parsed.utcoffset() is None:
 				raise ValueError("provenance time must include a timezone")
+			if parsed.microsecond % 1000 != 0:
+				raise ValueError("provenance time must use millisecond precision")
 			return parsed
 
 		start = parse_timestamp(start_time)
@@ -296,6 +298,32 @@ class NiFiClient:
 			raise ValueError("provenance time window must be positive and bounded")
 		if event_type is not None and (not isinstance(event_type, str) or event_type not in PROVENANCE_EVENT_TYPES):
 			raise ValueError("event_type is not a supported NiFi provenance event type")
+
+	@staticmethod
+	def _format_provenance_timestamp(value: str) -> str:
+		"""Convert the public ISO timestamp to NiFi's zoned date format.
+
+		NiFi 2.x expects ``MM/dd/yyyy HH:mm:ss.SSS <timezone>`` for provenance
+		requests. Keeping the input offset in the formatted value preserves the
+		instant without requiring a live server timezone lookup.
+		"""
+		parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+		offset = parsed.utcoffset()
+		if parsed.tzinfo is None or offset is None:
+			raise ValueError("provenance time must include a timezone")
+		if parsed.microsecond % 1000 != 0:
+			raise ValueError("provenance time must use millisecond precision")
+		offset_seconds = int(offset.total_seconds())
+		if offset_seconds % 60 != 0:
+			raise ValueError("provenance timezone offset must use minute precision")
+		offset_minutes = abs(offset_seconds) // 60
+		offset_sign = "+" if offset_seconds >= 0 else "-"
+		timezone = f"{offset_sign}{offset_minutes // 60:02d}:{offset_minutes % 60:02d}"
+		date = f"{parsed.month:02d}/{parsed.day:02d}/{parsed.year:04d}"
+		return (
+			f"{date} {parsed:%H:%M:%S}.{parsed.microsecond // 1000:03d} "
+			f"{timezone}"
+		)
 
 	@staticmethod
 	def _provenance_unknown(cleanup_status: str = "not_attempted") -> Dict[str, Any]:
@@ -350,8 +378,8 @@ class NiFiClient:
 			"searchTerms": {
 				"ProcessorID": {"value": component_id, "inverse": False},
 			},
-			"startDate": start_time,
-			"endDate": end_time,
+			"startDate": self._format_provenance_timestamp(start_time),
+			"endDate": self._format_provenance_timestamp(end_time),
 			"summarize": True,
 			"incrementalResults": False,
 		}
@@ -372,7 +400,10 @@ class NiFiClient:
 		try:
 			deadline = time.monotonic() + max(0.0, float(poll_timeout_seconds))
 			while True:
-				status = self._get_once(f"provenance/{query_id}")
+				status = self._get_once(
+					f"provenance/{query_id}",
+					params={"summarize": "true", "incrementalResults": "false"},
+				)
 				provenance_status = status.get("provenance")
 				finished_result = self._summarize_provenance_result(provenance_status)
 				if isinstance(provenance_status, dict) and provenance_status.get("finished") is True:

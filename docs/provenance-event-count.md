@@ -31,6 +31,13 @@ POST/GET/DELETE этого lifecycle не используют автомати�
 только явный bounded polling. Gateway не скачивает и не воспроизводит content,
 не запрашивает lineage и не возвращает события.
 
+Публичные `start_time` и `end_time` остаются ISO-8601 с timezone и точностью не
+выше миллисекунд. Перед POST gateway переводит каждый timestamp в формат NiFi 2.x
+`MM/dd/yyyy HH:mm:ss.SSS <timezone>`, сохраняя исходный offset и абсолютный
+момент времени; значения с sub-millisecond точностью отклоняются fail-closed,
+чтобы не отправлять изменённую границу. Каждый status GET явно передаёт
+`summarize=true` и `incrementalResults=false`, как это делает интерфейс NiFi 2.8.
+
 ## Результат и fail-closed
 
 Наружу возвращаются только:

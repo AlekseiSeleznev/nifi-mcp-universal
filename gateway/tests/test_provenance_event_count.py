@@ -16,6 +16,33 @@ START = "2026-08-04T00:00:00Z"
 END = "2026-08-04T00:30:00Z"
 
 
+@pytest.mark.parametrize(
+	("public_timestamp", "nifi_timestamp"),
+	[
+		("2026-08-04T00:30:00Z", "08/04/2026 00:30:00.000 +00:00"),
+		("2026-08-04T03:30:00+03:00", "08/04/2026 03:30:00.000 +03:00"),
+		("2026-08-04T00:30:00.123000-04:30", "08/04/2026 00:30:00.123 -04:30"),
+	],
+)
+def test_public_provenance_timestamp_is_transformed_to_exact_nifi_format(public_timestamp, nifi_timestamp):
+	assert NiFiClient._format_provenance_timestamp(public_timestamp) == nifi_timestamp
+
+
+def test_timestamp_formatter_rejects_naive_timestamp():
+	with pytest.raises(ValueError, match="timezone"):
+		NiFiClient._format_provenance_timestamp("2026-08-04T00:30:00")
+
+
+def test_timestamp_formatter_rejects_second_precision_offset():
+	with pytest.raises(ValueError, match="minute precision"):
+		NiFiClient._format_provenance_timestamp("2026-08-04T00:30:00+03:00:30")
+
+
+def test_timestamp_formatter_rejects_submillisecond_precision():
+	with pytest.raises(ValueError, match="millisecond precision"):
+		NiFiClient._format_provenance_timestamp("2026-08-04T00:30:00.123456Z")
+
+
 def _response(status_code: int, payload: dict | None = None):
     response = MagicMock(spec=requests.Response)
     response.status_code = status_code
@@ -150,8 +177,8 @@ def test_success_uses_exact_safe_filter_and_returns_no_raw_provenance():
                     "ProcessorID": {"value": "processor-1", "inverse": False},
                     "EventType": {"value": "RECEIVE", "inverse": False},
                 },
-                "startDate": START,
-                "endDate": END,
+                "startDate": "08/04/2026 00:00:00.000 +00:00",
+                "endDate": "08/04/2026 00:30:00.000 +00:00",
                 "summarize": True,
                 "incrementalResults": False,
             }
@@ -159,7 +186,31 @@ def test_success_uses_exact_safe_filter_and_returns_no_raw_provenance():
     }
     assert session.post.call_args.args[0].endswith("/provenance")
     assert session.get.call_args.args[0].endswith("/provenance/query-1")
+    assert session.get.call_args.kwargs["params"] == {
+        "summarize": "true",
+        "incrementalResults": "false",
+    }
     assert session.delete.call_args.args[0].endswith("/provenance/query-1")
+
+
+def test_offset_timestamp_is_sent_through_public_query_request_without_changing_its_instant():
+    session = MagicMock(spec=requests.Session)
+    session.headers = {}
+    session.post.return_value = _response(200, {"provenance": {"id": "query-offset"}})
+    session.get.return_value = _response(
+        200, {"provenance": {"finished": True, "results": {"totalCount": 1, "errors": []}}}
+    )
+    session.delete.return_value = _response(200, {})
+
+    _client(session).get_provenance_event_count(
+        "processor-1",
+        "2026-08-04T03:30:00+03:00",
+        "2026-08-04T04:00:00+03:00",
+    )
+
+    request = session.post.call_args.kwargs["json"]["provenance"]["request"]
+    assert request["startDate"] == "08/04/2026 03:30:00.000 +03:00"
+    assert request["endDate"] == "08/04/2026 04:00:00.000 +03:00"
 
 
 def test_success_without_optional_event_type_does_not_add_a_raw_filter():
@@ -319,7 +370,7 @@ def test_single_attempt_json_helper_rejects_empty_invalid_and_non_object_respons
 
 @pytest.mark.parametrize(
     "start_time",
-    [None, "x" * 65, "not-a-timestamp"],
+    [None, "x" * 65, "not-a-timestamp", "2026-08-04T00:00:00.000001Z"],
 )
 def test_client_validation_rejects_non_string_long_and_malformed_timestamps(start_time):
     client = _client(MagicMock(spec=requests.Session))
