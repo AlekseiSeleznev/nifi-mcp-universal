@@ -411,11 +411,6 @@ function toggleAuth(prefix) {
   });
   var target = container.querySelector('#' + (prefix === 'f' ? 'af-' : 'eaf-') + method);
   if (target) target.classList.add('active');
-  // Auto-uncheck SSL verify for certificate auth (self-signed certs are typical for NiFi)
-  var sslCheckbox = document.getElementById(prefix === 'f' ? 'f-ssl' : 'e-ssl');
-  if (sslCheckbox && (method === 'certificate_p12' || method === 'certificate_pem')) {
-    sslCheckbox.checked = false;
-  }
 }
 
 function authLabel(method) {
