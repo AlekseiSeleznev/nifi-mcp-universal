@@ -288,3 +288,43 @@ class TestAdminToolList:
         required = tool.inputSchema.get("required", [])
         assert "name" in required
         assert "url" in required
+
+
+@pytest.mark.asyncio
+async def test_registered_certificate_connection_can_be_tested_without_resending_credentials():
+    import jsonschema
+
+    schema = next(t.inputSchema for t in admin.TOOLS if t.name == "test_nifi_connection")
+    jsonschema.validate({"name": "saved"}, schema)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate({"name": "saved", "url": "https://different.example"}, schema)
+    conn = ConnectionInfo(name="saved", url="https://nifi.example/nifi-api", auth_method="certificate_p12", cert_path="saved/cert.p12")
+    client = MagicMock()
+    client.get_version_info.return_value = {"about": {"version": "2.11.0"}}
+    with patch.object(admin, "registry") as registry, patch.object(admin, "_build_client", return_value=client) as build:
+        registry.get.return_value = conn
+        result = _parse(await admin.handle("test_nifi_connection", {"name": "saved"}, "session"))
+    assert result == {"ok": True, "nifi_version": "2.11.0"}
+    build.assert_called_once_with(conn)
+    client.session.close.assert_called_once()
+    registry.save.assert_not_called()
+    registry.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_unknown_registered_connection_test_is_sanitized():
+    with patch.object(admin, "registry") as registry, patch.object(admin, "_build_client") as build:
+        registry.get.return_value = None
+        result = _parse(await admin.handle("test_nifi_connection", {"name": "missing"}, None))
+    assert result == {"ok": False, "error": "Connection not found"}
+    build.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_connection_probe_closes_session_after_failure():
+    client = MagicMock()
+    client.get_version_info.side_effect = RuntimeError("synthetic-sensitive-response")
+    with patch.object(admin, "_build_client", return_value=client):
+        result = _parse(await admin.handle("test_nifi_connection", {"url": "https://nifi.example"}, None))
+    assert result == {"ok": False, "error": "Connection test failed"}
+    client.session.close.assert_called_once()

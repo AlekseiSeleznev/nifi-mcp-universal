@@ -1,3 +1,4 @@
+#Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -43,7 +44,7 @@ function Install-CodexSkills {
             Write-Warn "Run manually later: .\\tools\\install-codex-skills.ps1"
         }
     } else {
-        Write-Warn "tools/install-codex-skills.ps1 not found — skipping Codex skill installation"
+        Write-Warn "tools/install-codex-skills.ps1 not found - skipping Codex skill installation"
     }
 }
 
@@ -71,7 +72,7 @@ $codexCmd = Get-Command codex -ErrorAction SilentlyContinue
 if ($null -ne $codexCmd) {
     Write-Ok "codex CLI found: $((codex --version | Select-Object -First 1))"
 } else {
-    Write-Warn "codex CLI not found — gateway installation will continue without MCP auto-registration."
+    Write-Warn "codex CLI not found - gateway installation will continue without MCP auto-registration."
     Write-Warn "Use CODEX.md for optional Codex registration or AGENTS.md for any other MCP client."
 }
 
@@ -96,6 +97,9 @@ if ($ApiKey) {
 Write-Host ""
 Write-Host "=== Building and starting container ==="
 docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d --build --remove-orphans
+if ($LASTEXITCODE -ne 0) {
+    Fail "Docker Compose failed to build or start the gateway."
+}
 Write-Ok "Container started"
 
 Write-Host ""
@@ -114,8 +118,8 @@ for ($i = 0; $i -lt 30; $i++) {
 
 if (-not $Healthy) {
     Write-Warn "Gateway not healthy after 30s."
-    Write-Warn "Check logs: docker compose -f docker-compose.yml -f docker-compose.windows.yml logs nifi-mcp-gateway"
-    exit 1
+    Write-Warn "Check logs: docker compose -f docker-compose.yml -f docker-compose.windows.yml logs gateway"
+    Fail "Gateway did not become healthy."
 }
 Write-Ok "Gateway is healthy on port $Port"
 
@@ -123,6 +127,7 @@ if ($SetupCI -ne "1" -and (Test-Path "tools/ensure-docker-autostart-windows.ps1"
     Write-Info "Ensuring Docker Desktop is set to start at login..."
     try {
         & powershell -ExecutionPolicy Bypass -File "tools/ensure-docker-autostart-windows.ps1" *> $null
+        if ($LASTEXITCODE -ne 0) { throw "Docker Desktop autostart setup failed" }
         Write-Ok "Docker Desktop autostart configured"
     } catch {
         Write-Warn "Could not configure Docker Desktop autostart automatically."
@@ -143,7 +148,9 @@ if ($null -ne $codexCmd) {
             } else {
                 & codex mcp add $ServerName --url "http://localhost:$Port/mcp"
             }
+            if ($LASTEXITCODE -ne 0) { throw "Codex MCP registration failed" }
             & codex mcp get $ServerName --json *> $null
+            if ($LASTEXITCODE -ne 0) { throw "Codex MCP registration verification failed" }
             $CodexRegistered = $true
             Write-Ok "Registered '$ServerName' in Codex"
         } catch {

@@ -62,6 +62,8 @@ Pre-flight (always):
      If empty: ask the user for NiFi URL + auth method and call
      connect_nifi (readonly=true by default — safer).
   2. test_nifi_connection — before any heavy operation on a new host.
+     Use name for a registered connection (including certificate auth),
+     or url and credentials for a new connection; never both name and url.
   3. get_root_process_group — every flow navigation starts here; cache
      the returned PG id for subsequent list_* calls.
 

@@ -14,7 +14,7 @@ Regenerate with: `python3 tools/generate_tool_catalog.py`.
 | `get_server_status` | Get MCP gateway status: active connections, sessions, default. |
 | `list_nifi_connections` | List all registered NiFi connections with their status. |
 | `switch_nifi` | Switch the active NiFi connection for the current session. |
-| `test_nifi_connection` | Test connectivity to a NiFi instance without saving. |
+| `test_nifi_connection` | Test connectivity without saving. Supply a registered name (including certificate auth), or a URL and credentials for a new connection. |
 
 ## `read_tools` (26)
 
@@ -36,7 +36,7 @@ Regenerate with: `python3 tools/generate_tool_catalog.py`.
 | `get_processor_details` | Get detailed information about a specific processor. |
 | `get_processor_state` | Get just the state of a processor (RUNNING, STOPPED, DISABLED). |
 | `get_processor_types` | Get all available processor types (read-only). |
-| `get_provenance_event_count` | Count provenance events for one component in a bounded time window (read-only, sanitized result). |
+| `get_provenance_event_count` | Count provenance events for one component in a bounded time window (read-only, sanitized result; capped at 1000). |
 | `get_recommended_workflow` | Get recommended step-by-step workflow for building a specific flow. |
 | `get_root_process_group` | Return the root process group (read-only). |
 | `get_setup_instructions` | Get comprehensive setup instructions for NiFi MCP Server configuration. |

@@ -34,6 +34,9 @@ MCP-шлюз для Apache NiFi. Публикует один streamable HTTP end
 Gateway использует MCP Python SDK 1.x (`mcp>=1.9.0,<2.0.0`). Переход на SDK 2.x
 потребует отдельной миграции обработчиков MCP.
 
+Происхождение NiFi-клиента, закреплённая ревизия upstream и границы проверки
+Windows описаны в [docs/upstream.md](docs/upstream.md).
+
 ## Быстрый старт
 
 ### Linux / macOS

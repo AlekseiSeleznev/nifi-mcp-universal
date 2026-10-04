@@ -13,13 +13,18 @@ if ($null -ne $pythonCmd) {
 }
 
 & $pythonExe -m compileall -q gateway
+if ($LASTEXITCODE -ne 0) { throw "Python compilation failed" }
 & $pythonExe skills/nifi-flow-layout/scripts/nifi_layout.py --mode self-test
+if ($LASTEXITCODE -ne 0) { throw "Layout self-test failed" }
 
 $bashCmd = Get-Command bash -ErrorAction SilentlyContinue
 if ($null -ne $bashCmd) {
     bash -n setup.sh
+    if ($LASTEXITCODE -ne 0) { throw "setup.sh syntax check failed" }
     bash -n uninstall.sh
+    if ($LASTEXITCODE -ne 0) { throw "uninstall.sh syntax check failed" }
     bash -n tools/install-codex-skills.sh
+    if ($LASTEXITCODE -ne 0) { throw "Skill installer syntax check failed" }
 } else {
     Write-Host "bash is unavailable; skipping setup.sh syntax check"
 }
@@ -41,7 +46,9 @@ if ($null -ne $dockerCmd) {
     & docker compose version *> $null
     if ($LASTEXITCODE -eq 0) {
         & docker compose -f docker-compose.yml config -q
+        if ($LASTEXITCODE -ne 0) { throw "Linux Compose configuration is invalid" }
         & docker compose -f docker-compose.yml -f docker-compose.windows.yml config -q
+        if ($LASTEXITCODE -ne 0) { throw "Windows Compose configuration is invalid" }
     } else {
         Write-Host "docker compose is unavailable on this runner; skipping compose config smoke checks"
     }

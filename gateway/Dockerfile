@@ -8,6 +8,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=appuser:appgroup gateway/ gateway/
+COPY THIRD_PARTY_NOTICES.md ./
+COPY licenses/ licenses/
 
 RUN mkdir -p /data/certs && chown -R appuser:appgroup /app /data
 

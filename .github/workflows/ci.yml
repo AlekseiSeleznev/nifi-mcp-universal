@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -150,7 +151,26 @@ jobs:
             bash -n setup.sh
           fi
 
-      - name: Fresh install smoke (Windows static checks)
+      - uses: actions/setup-python@v5
+        if: runner.os == 'Windows'
+        with:
+          python-version: "3.12"
+
+      - name: Install Windows installer test dependencies
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m pip install pytest
+          if ($LASTEXITCODE -ne 0) { throw "Test dependency installation failed" }
+
+      - name: Windows installer execution (PowerShell 5.1 and 7, stubbed Docker)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m pytest tests/install -v
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer tests failed" }
+
+      - name: Fresh install smoke (Windows Compose and syntax checks)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |

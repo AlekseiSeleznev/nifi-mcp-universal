@@ -117,10 +117,11 @@ TOOLS: list[Tool] = [
     ),
     Tool(
         name="test_nifi_connection",
-        description="Test connectivity to a NiFi instance without saving.",
+        description="Test connectivity without saving. Supply a registered name (including certificate auth), or a URL and credentials for a new connection.",
         inputSchema={
             "type": "object",
             "properties": {
+                "name": {"type": "string", "description": "Existing connection name; mutually exclusive with url"},
                 "url": {"type": "string", "description": "NiFi API base URL"},
                 "auth_method": {
                     "type": "string",
@@ -147,7 +148,7 @@ TOOLS: list[Tool] = [
                 "password": {"type": "string"},
                 "knox_gateway_url": {"type": "string"},
             },
-            "required": ["url"],
+            "oneOf": [{"required": ["name"]}, {"required": ["url"]}],
         },
     ),
 ]
@@ -223,31 +224,37 @@ async def handle(name: str, arguments: dict, session_id: str | None) -> list[Tex
         return _json_text(client_manager.get_status())
 
     if name == "test_nifi_connection":
-        url = arguments["url"].strip()
-        try:
-            auth_method = _resolve_auth_method(arguments)
-        except ValueError as e:
-            return _json_text({"ok": False, "error": str(e)})
-        conn = ConnectionInfo(
-            name="__test__",
-            url=url,
-            auth_method=auth_method,
-            verify_ssl=arguments.get("verify_ssl", True),
-            knox_token=arguments.get("knox_token", ""),
-            knox_cookie=arguments.get("knox_cookie", ""),
-            knox_passcode=arguments.get("knox_passcode", ""),
-            knox_user=_resolve_username(arguments),
-            knox_password=_resolve_password(arguments),
-            knox_gateway_url=arguments.get("knox_gateway_url", ""),
-        )
+        if "name" in arguments:
+            conn = registry.get(arguments["name"].strip())
+            if conn is None:
+                return _safe_tool_error("Connection not found", ok=False)
+        else:
+            try:
+                auth_method = _resolve_auth_method(arguments)
+            except ValueError as e:
+                return _json_text({"ok": False, "error": str(e)})
+            conn = ConnectionInfo(
+                name="__test__",
+                url=arguments["url"].strip(),
+                auth_method=auth_method,
+                verify_ssl=arguments.get("verify_ssl", True),
+                knox_token=arguments.get("knox_token", ""),
+                knox_cookie=arguments.get("knox_cookie", ""),
+                knox_passcode=arguments.get("knox_passcode", ""),
+                knox_user=_resolve_username(arguments),
+                knox_password=_resolve_password(arguments),
+                knox_gateway_url=arguments.get("knox_gateway_url", ""),
+            )
         try:
             client = _build_client(conn)
-            info = client.get_version_info()
+            try:
+                info = client.get_version_info()
+            finally:
+                client.session.close()
             version = info.get("about", {}).get("version", "unknown")
-            client.session.close()
             return _json_text({"ok": True, "nifi_version": version})
         except Exception:
-            log.exception("Test NiFi connection failed for %s", url)
+            log.exception("Test NiFi connection failed")
             return _safe_tool_error("Connection test failed", ok=False)
 
     return _json_text({"error": f"Unknown admin tool: {name}"})
