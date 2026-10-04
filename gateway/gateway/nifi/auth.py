@@ -9,6 +9,20 @@ from typing import Optional, Tuple
 import requests
 
 
+class _CertificateSession(requests.Session):
+	"""Own temporary certificate files for the lifetime of the HTTP session."""
+
+	def __init__(self, cleanup):
+		super().__init__()
+		self._cleanup = cleanup
+
+	def close(self):
+		try:
+			super().close()
+		finally:
+			self._cleanup(self.cert or ())
+
+
 class KnoxAuthFactory:
 	def __init__(
 		self,
@@ -70,37 +84,49 @@ class KnoxAuthFactory:
 		cert_pem = certificate.public_bytes(Encoding.PEM)
 		key_pem = private_key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
 
-		cert_file = tempfile.NamedTemporaryFile(suffix=".crt", delete=False)
-		cert_file.write(cert_pem)
-		cert_file.flush()
-		cert_file.close()
-		os.chmod(cert_file.name, 0o600)
-
-		key_file = tempfile.NamedTemporaryFile(suffix=".key", delete=False)
-		key_file.write(key_pem)
-		key_file.flush()
-		key_file.close()
-		os.chmod(key_file.name, 0o600)
-
-		self._tmp_files.extend([cert_file.name, key_file.name])
+		paths = []
+		try:
+			for suffix, data in ((".crt", cert_pem), (".key", key_pem)):
+				file = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+				self._tmp_files.append(file.name)
+				paths.append(file.name)
+				try:
+					file.write(data)
+					file.flush()
+				finally:
+					file.close()
+				os.chmod(file.name, 0o600)
+		except Exception:
+			self._cleanup_tmp_files(paths)
+			raise
 		if not self._cleanup_registered:
 			atexit.register(self._cleanup_tmp_files)
 			self._cleanup_registered = True
 
-		return (cert_file.name, key_file.name)
+		return (paths[0], paths[1])
 
-	def _cleanup_tmp_files(self) -> None:
-		for path in self._tmp_files:
+	def _cleanup_tmp_files(self, paths=None) -> None:
+		owned = [path for path in self._tmp_files if paths is None or path in paths]
+		for path in owned:
 			try:
 				os.unlink(path)
 			except OSError:
 				pass
-		self._tmp_files.clear()
+		self._tmp_files[:] = [path for path in self._tmp_files if path not in owned]
+		if not self._tmp_files:
+			atexit.unregister(self._cleanup_tmp_files)
+			self._cleanup_registered = False
 
 	def build_session(self) -> requests.Session:
-		session = requests.Session()
+		session = _CertificateSession(self._cleanup_tmp_files)
 		session.verify = self.verify
+		try:
+			return self._configure_session(session)
+		except Exception:
+			session.close()
+			raise
 
+	def _configure_session(self, session: requests.Session) -> requests.Session:
 		client_cert = self._resolve_client_cert()
 		if client_cert:
 			session.cert = client_cert
@@ -172,4 +198,3 @@ class KnoxAuthFactory:
 			return data.get("access_token") or data.get("token") or data.get("accessToken")
 		except ValueError:
 			return resp.text.strip()
-

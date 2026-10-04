@@ -3,6 +3,8 @@
 # Or run: docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d
 services:
   gateway:
+    build:
+      network: default
     network_mode: bridge
     ports:
       - "${NIFI_MCP_PORT:-8085}:${NIFI_MCP_PORT:-8085}"

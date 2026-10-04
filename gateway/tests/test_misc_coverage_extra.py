@@ -46,7 +46,7 @@ def test_registry_save_failure_is_logged(tmp_path: Path):
          patch("gateway.nifi_registry.tempfile.mkstemp", side_effect=OSError("disk full")), \
          patch("gateway.nifi_registry.log") as log:
         registry.save()
-    log.exception.assert_called_once()
+    log.error.assert_called_once()
 
 
 @pytest.mark.asyncio

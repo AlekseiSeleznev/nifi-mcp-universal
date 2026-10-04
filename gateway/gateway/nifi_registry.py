@@ -120,7 +120,7 @@ class ConnectionRegistry:
                     pass
                 raise
         except Exception:
-            log.exception("Failed to save state to %s", STATE_FILE)
+            log.error("Failed to save state to %s", STATE_FILE)
 
     def load(self) -> list[dict]:
         try:
@@ -138,7 +138,7 @@ class ConnectionRegistry:
                 log.info("Loaded %d connections from state", len(conns))
                 return conns
         except Exception:
-            log.exception("Failed to load state from %s", STATE_FILE)
+            log.error("Failed to load state from %s", STATE_FILE)
         return []
 
 

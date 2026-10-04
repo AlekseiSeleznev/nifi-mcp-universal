@@ -160,6 +160,7 @@ docker image rm nifi-mcp-gateway 2>/dev/null || true
 - **Intent recognition.** Фразы «используем NiFi `<имя>`», «работаем с NiFi `<имя>`», «подключись к NiFi `<имя>`», «NiFi / Apache NiFi / нифи», любые NiFi-термины (processor в dataflow-контексте, process group, controller service, flowfile, bulletin, relationship, parameter context, имена GetFile/PutFile/InvokeHTTP/ConsumeKafka и т.п.) → **этот MCP**. При упоминании инстанса: `list_nifi_connections` → если есть, `switch_nifi`; иначе попросить URL+auth и `connect_nifi` (default `readonly=true`). Если пользователь сказал «X» без указания системы — `list_nifi_connections`; если есть — работаем, если нет — честно сказать «в NiFi-MCP такой регистрации нет», не выдумывать.
 - **Все NiFi-задачи — через MCP `nifi-mcp-universal`** (`http://localhost:8085/mcp`). Не гадать REST-пути и имена свойств.
 - **Pre-flight:** `list_nifi_connections` → если пусто, `connect_nifi` с `readonly=true` → `test_nifi_connection` → `get_root_process_group`.
+- Для сохранённого подключения вызывай `test_nifi_connection(name=...)`: это проверяет и сертификатную аутентификацию без повторной передачи секретов. Для нового подключения используй `url` и auth-параметры; `name` и `url` одновременно не передаются.
 - **Safe update:** всегда сначала `get_*_details` для взятия `version` (оптимистическая блокировка NiFi API).
 - **Provenance count:** для безопасного подсчёта используй только
   `get_provenance_event_count` с `component_id`, обязательным bounded

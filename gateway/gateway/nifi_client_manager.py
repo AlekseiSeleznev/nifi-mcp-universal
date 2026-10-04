@@ -94,7 +94,7 @@ class NiFiClientManager:
                 log.info("Client %s already exists, skipping", conn.name)
                 return
 
-        log.info("Building client for %s (%s)", conn.name, conn.url)
+        log.info("Building client for %s", conn.name)
         client = _build_client(conn)
 
         # Validate by fetching version
@@ -103,8 +103,8 @@ class NiFiClientManager:
             version = info.get("about", {}).get("version", "unknown")
             conn.nifi_version = version
             log.info("Connected to %s — NiFi %s", conn.name, version)
-        except Exception as e:
-            log.warning("Cannot verify %s: %s", conn.name, e)
+        except Exception:
+            log.warning("Cannot verify connection %s", conn.name)
             conn.nifi_version = "unknown"
 
         with self._lock:

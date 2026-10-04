@@ -107,7 +107,7 @@ async def test_session_cleanup_loop_handles_cleanup_exception(monkeypatch):
     with pytest.raises(asyncio.CancelledError):
         await server_mod._session_cleanup_loop()
 
-    server_mod.log.exception.assert_called_once()
+    server_mod.log.error.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -196,7 +196,7 @@ async def test_lifespan_logs_restore_and_default_connection_failures(monkeypatch
     async with server_mod.lifespan(MagicMock()):
         pass
 
-    assert log.exception.call_count >= 2
+    assert log.error.call_count >= 2
 
 
 @pytest.mark.asyncio

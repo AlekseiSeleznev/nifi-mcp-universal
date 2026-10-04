@@ -34,6 +34,9 @@ MCP-шлюз для Apache NiFi. Публикует один streamable HTTP end
 Gateway использует MCP Python SDK 1.x (`mcp>=1.9.0,<2.0.0`). Переход на SDK 2.x
 потребует отдельной миграции обработчиков MCP.
 
+Происхождение NiFi-клиента, закреплённая ревизия upstream и границы проверки
+Windows описаны в [docs/upstream.md](docs/upstream.md).
+
 ## Быстрый старт
 
 ### Linux / macOS
@@ -171,6 +174,22 @@ docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d --build
 `get_provenance_event_count`; его bounded inputs, async cleanup, fail-closed
 результат и требуемые NiFi policies описаны в
 [docs/provenance-event-count.md](docs/provenance-event-count.md).
+
+### Сохранение сертификата и пароля после перезапуска
+
+Сертификаты хранятся в постоянном Docker volume `gw-data`. Чтобы gateway
+восстанавливал также пароль сертификата и другие секреты подключений, задайте
+в своём `.env` `NIFI_MCP_PERSIST_SECRETS_IN_STATE=true` и пересоздайте контейнер
+через `docker compose up -d --force-recreate` (на Windows добавьте оба Compose
+файла, как в инструкции установки). Обычный `restart` не применяет новые
+переменные окружения контейнера.
+
+Если пароль ранее не сохранялся, один раз введите его в dashboard при
+редактировании подключения. MCP и dashboard используют один реестр. Пароль
+записывается в `/data/nifi_state.json` с правами `0600`, а API возвращает маску.
+Хранилище не шифруется самим gateway; доступ к Docker и резервным копиям volume
+нужно ограничить. Не добавляйте `.env`, сертификаты и state в Git. Команда
+`docker compose down -v` удаляет этот volume вместе с настройками.
 
 ## Linux и Windows: что важно знать
 

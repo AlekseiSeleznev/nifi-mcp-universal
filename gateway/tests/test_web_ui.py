@@ -210,6 +210,7 @@ class TestDashboardApiLifecycle:
              patch("gateway.web_ui.client_manager") as mock_mgr:
             ms.api_key = ""
             mock_reg.list_all.return_value = [mock_conn]
+            mock_reg.get.return_value = None
             mock_reg.remove.return_value = object()
             mock_reg.active = ""
             client = TestClient(app)
