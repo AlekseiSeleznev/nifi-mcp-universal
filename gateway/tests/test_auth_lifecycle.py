@@ -53,6 +53,26 @@ def test_failed_auth_setup_closes_the_http_session(factory):
     assert not factory._tmp_files
 
 
+def test_two_sessions_own_their_certificates_independently(factory):
+    first = factory.build_session()
+    second = factory.build_session()
+    first.close()
+    assert all(Path(path).is_file() for path in second.cert)
+    assert factory._cleanup_registered
+    second.close()
+    assert not factory._tmp_files
+
+
+def test_closing_pem_session_does_not_remove_user_files(factory, tmp_path):
+    factory.p12_path = None
+    cert, key = tmp_path / "user.crt", tmp_path / "user.key"
+    cert.write_text("synthetic-certificate")
+    key.write_text("synthetic-key")
+    factory.client_cert, factory.client_key = str(cert), str(key)
+    factory.build_session().close()
+    assert cert.exists() and key.exists()
+
+
 def test_partial_certificate_extraction_is_removed(factory):
     paths = []
     def failing_chmod(path, mode):

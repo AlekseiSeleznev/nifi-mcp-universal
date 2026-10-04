@@ -20,7 +20,7 @@ class _CertificateSession(requests.Session):
 		try:
 			super().close()
 		finally:
-			self._cleanup()
+			self._cleanup(self.cert or ())
 
 
 class KnoxAuthFactory:
@@ -97,7 +97,7 @@ class KnoxAuthFactory:
 					file.close()
 				os.chmod(file.name, 0o600)
 		except Exception:
-			self._cleanup_tmp_files()
+			self._cleanup_tmp_files(paths)
 			raise
 		if not self._cleanup_registered:
 			atexit.register(self._cleanup_tmp_files)
@@ -105,15 +105,17 @@ class KnoxAuthFactory:
 
 		return (paths[0], paths[1])
 
-	def _cleanup_tmp_files(self) -> None:
-		for path in self._tmp_files:
+	def _cleanup_tmp_files(self, paths=None) -> None:
+		owned = [path for path in self._tmp_files if paths is None or path in paths]
+		for path in owned:
 			try:
 				os.unlink(path)
 			except OSError:
 				pass
-		self._tmp_files.clear()
-		atexit.unregister(self._cleanup_tmp_files)
-		self._cleanup_registered = False
+		self._tmp_files[:] = [path for path in self._tmp_files if path not in owned]
+		if not self._tmp_files:
+			atexit.unregister(self._cleanup_tmp_files)
+			self._cleanup_registered = False
 
 	def build_session(self) -> requests.Session:
 		session = _CertificateSession(self._cleanup_tmp_files)

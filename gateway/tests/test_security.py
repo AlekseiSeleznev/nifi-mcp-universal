@@ -45,7 +45,7 @@ class TestConnectionNameValidation:
         conn = ConnectionInfo(name="valid-name", url="https://nifi")
         with patch("gateway.web_ui.registry") as mock_reg, \
              patch("gateway.web_ui.client_manager") as mock_mgr:
-            mock_reg.get.return_value = conn
+            mock_reg.get.return_value = None
             mock_mgr.connect.return_value = None
             resp = self._post_connect({
                 "name": "valid-name", "url": "https://nifi",
@@ -88,7 +88,7 @@ class TestDashboardApiAuth:
              patch("gateway.web_ui.registry") as mock_reg, \
              patch("gateway.web_ui.client_manager") as mock_mgr:
             ms.api_key = "secret-token"
-            mock_reg.get.return_value = conn
+            mock_reg.get.return_value = None
             mock_mgr.connect.return_value = None
             resp = client.post(
                 "/api/connect",

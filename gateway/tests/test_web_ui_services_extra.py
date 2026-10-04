@@ -97,6 +97,7 @@ def test_web_ui_helper_rejects_invalid_content_length(monkeypatch):
 @pytest.mark.asyncio
 async def test_connect_from_request_json_paths(monkeypatch, tmp_path: Path):
     registry = MagicMock()
+    registry.get.return_value = None
     manager = MagicMock()
 
     missing = await connect_from_request(
@@ -139,6 +140,7 @@ async def test_connect_from_request_json_paths(monkeypatch, tmp_path: Path):
 @pytest.mark.asyncio
 async def test_connect_from_request_multipart_handles_files_and_size_limits(tmp_path: Path, monkeypatch):
     registry = MagicMock()
+    registry.get.return_value = None
     manager = MagicMock()
     chmod_calls = []
 
@@ -172,11 +174,11 @@ async def test_connect_from_request_multipart_handles_files_and_size_limits(tmp_
 
     assert response.status_code == 200
     added_conn = registry.add.call_args[0][0]
-    assert added_conn.cert_path == "prod/cert.pem"
-    assert added_conn.cert_key_path == "prod/key.pem"
-    assert (tmp_path / "prod" / "cert.pem").read_bytes() == b"CERT"
-    assert (tmp_path / "prod" / "key.pem").read_bytes() == b"KEY"
-    assert chmod_calls == [("cert.pem", 0o600), ("key.pem", 0o600)]
+    assert added_conn.cert_path.startswith("prod/upload-")
+    assert added_conn.cert_key_path.startswith("prod/upload-")
+    assert (tmp_path / added_conn.cert_path).read_bytes() == b"CERT"
+    assert (tmp_path / added_conn.cert_key_path).read_bytes() == b"KEY"
+    assert chmod_calls == [(Path(added_conn.cert_path).name, 0o600), (Path(added_conn.cert_key_path).name, 0o600)]
 
     too_large = await connect_from_request(
         _DummyRequest(
@@ -388,9 +390,9 @@ async def test_edit_from_request_multipart_and_restore_on_failure(tmp_path: Path
     assert response.status_code == 502
     restored = registry.add.call_args_list[-1][0][0]
     assert restored.name == "old"
-    assert (tmp_path / "new" / "cert.pem").read_bytes() == b"CERT"
-    assert (tmp_path / "new" / "key.pem").read_bytes() == b"KEY"
-    assert chmod_calls == [("cert.pem", 0o600), ("key.pem", 0o600)]
+    assert not list((tmp_path / "new").iterdir())
+    assert len(chmod_calls) == 2
+    assert all(mode == 0o600 for _, mode in chmod_calls)
 
 
 @pytest.mark.asyncio
