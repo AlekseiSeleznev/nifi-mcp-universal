@@ -67,6 +67,14 @@ Pre-flight (always):
   3. get_root_process_group — every flow navigation starts here; cache
      the returned PG id for subsequent list_* calls.
 
+Certificate connections:
+  connect_nifi and a new-URL test_nifi_connection accept cert_path relative
+  to /data/certs on the gateway, cert_password for P12, and cert_key_path
+  for PEM. Provision those files on the gateway or upload via dashboard;
+  a path on the MCP client's computer does not upload a file.
+  connect_nifi requires a new name: select an existing one with switch_nifi
+  or edit its settings in the dashboard.
+
 Read / inspect flow:
   list_processors, list_connections, list_input_ports, list_output_ports,
   get_processor_details (capture `version` for later safe updates!),

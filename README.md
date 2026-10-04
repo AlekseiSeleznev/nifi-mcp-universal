@@ -170,6 +170,18 @@ docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d --build
 - `switch_nifi`
 - `test_nifi_connection`
 
+Для `certificate_p12` передайте `cert_path` и пароль в `cert_password`.
+Для `certificate_pem` передайте `cert_path` и `cert_key_path`. Пути задаются
+относительно `/data/certs` внутри gateway, например `team/client.p12`.
+Файлы должны быть заранее размещены на gateway или загружены через dashboard;
+путь на компьютере MCP-клиента не загружает файл на сервер.
+
+`test_nifi_connection(name=...)` проверяет сохранённое подключение с его
+сертификатом и паролем. Для проверки нового подключения используйте `url` и
+те же параметры аутентификации; эта проверка не сохраняет подключение.
+`connect_nifi` принимает только новое имя. Для существующего имени используйте
+`switch_nifi`, а для изменения параметров — редактирование в dashboard.
+
 Для безопасного подсчёта provenance-событий используйте
 `get_provenance_event_count`; его bounded inputs, async cleanup, fail-closed
 результат и требуемые NiFi policies описаны в

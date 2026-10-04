@@ -50,6 +50,9 @@ async def _stage_certificate_uploads(form, certs_dir, name):
     except Exception:
         _discard_certificate_uploads(paths)
         return {}, [], _sanitized_connection_error("certificate upload failed")
+    except BaseException:
+        _discard_certificate_uploads(paths)
+        raise
     return uploaded, paths, None
 
 
@@ -282,62 +285,28 @@ async def test_from_request(request, *, build_client, connection_info_cls, certs
     if too_large:
         return too_large
 
-    cert_path = ""
-    cert_key_path = ""
-    cert_password = ""
-    max_cert_bytes = 1 * 1024 * 1024
-
-    if "multipart" in content_type:
-        body = await request.form()
-        url = body.get("url", "").strip()
-        auth_method = body.get("auth_method", "none")
-        verify_ssl = body.get("verify_ssl", "true").lower() == "true"
-
-        cert_file = body.get("cert_file")
-        if cert_file and hasattr(cert_file, "read"):
-            safe_filename = os.path.basename(cert_file.filename or "cert") or "cert"
-            cert_dir = os.path.join(certs_dir, "__test__")
-            os.makedirs(cert_dir, exist_ok=True)
-            dest = os.path.join(cert_dir, safe_filename)
-            data = await cert_file.read()
-            if len(data) > max_cert_bytes:
-                return error_response("Certificate file too large (max 1 MB)", 400)
-            with open(dest, "wb") as f:
-                f.write(data)
-            os.chmod(dest, 0o600)
-            cert_path = f"__test__/{safe_filename}"
-
-        key_file = body.get("key_file")
-        if key_file and hasattr(key_file, "read"):
-            safe_key_filename = os.path.basename(key_file.filename or "key") or "key"
-            cert_dir = os.path.join(certs_dir, "__test__")
-            os.makedirs(cert_dir, exist_ok=True)
-            dest = os.path.join(cert_dir, safe_key_filename)
-            data = await key_file.read()
-            if len(data) > max_cert_bytes:
-                return error_response("Key file too large (max 1 MB)", 400)
-            with open(dest, "wb") as f:
-                f.write(data)
-            os.chmod(dest, 0o600)
-            cert_key_path = f"__test__/{safe_key_filename}"
-
-        cert_password = body.get("cert_password", "")
-    else:
-        body = await request.json()
-        url = body.get("url", "").strip()
-        auth_method = body.get("auth_method", "none")
-        verify_ssl = body.get("verify_ssl", True)
-
+    multipart = "multipart" in content_type
+    body = await request.form() if multipart else await request.json()
+    url = body.get("url", "").strip()
     if not url:
         return error_response("url is required", 400)
+
+    auth_method = body.get("auth_method", "none")
+    verify_ssl = body.get("verify_ssl", "true").lower() == "true" if multipart else body.get("verify_ssl", True)
+    uploaded = {}
+    candidates = []
+    if multipart:
+        uploaded, candidates, upload_error = await _stage_certificate_uploads(body, certs_dir, "__test__")
+        if upload_error is not None:
+            return upload_error
 
     conn = connection_info_cls(
         name="__test__", url=url,
         auth_method=auth_method,
         verify_ssl=verify_ssl,
-        cert_path=cert_path,
-        cert_key_path=cert_key_path,
-        cert_password=cert_password,
+        cert_path=uploaded.get("cert_file", ""),
+        cert_key_path=uploaded.get("key_file", ""),
+        cert_password=body.get("cert_password", "") if multipart else "",
         knox_token=body.get("knox_token", ""),
         knox_cookie=body.get("knox_cookie", ""),
         knox_passcode=body.get("knox_passcode", ""),
@@ -358,3 +327,4 @@ async def test_from_request(request, *, build_client, connection_info_cls, certs
             client.session.close()
         except Exception:
             pass
+        _discard_certificate_uploads(candidates)

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-import os
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from gateway.config import settings
 from gateway.nifi_registry import ConnectionInfo, registry
@@ -41,14 +41,28 @@ def _normalize_nifi_url(url: str) -> str:
     return url + "/nifi-api"
 
 
+def _resolve_certificate_path(value: str) -> str:
+    if not value:
+        return ""
+    path = Path(value)
+    if path.is_absolute():
+        raise ValueError("Certificate paths must be relative to the certificate directory")
+    root = Path(CERTS_DIR).resolve()
+    resolved = (root / path).resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError("Certificate paths must stay inside the certificate directory")
+    return str(resolved)
+
+
 def _build_client(conn: ConnectionInfo) -> NiFiClient:
     """Build a NiFiClient from ConnectionInfo."""
-    cert_path_abs = ""
-    cert_key_abs = ""
-    if conn.cert_path:
-        cert_path_abs = os.path.join(CERTS_DIR, conn.cert_path)
-    if conn.cert_key_path:
-        cert_key_abs = os.path.join(CERTS_DIR, conn.cert_key_path)
+    if conn.auth_method in {"certificate_p12", "certificate_pem"} and not conn.cert_path.strip():
+        raise ValueError("Certificate path is required for certificate authentication")
+    if conn.auth_method == "certificate_pem" and not conn.cert_key_path.strip():
+        raise ValueError("Certificate key path is required for PEM authentication")
+
+    cert_path_abs = _resolve_certificate_path(conn.cert_path)
+    cert_key_abs = _resolve_certificate_path(conn.cert_key_path)
 
     p12_path = cert_path_abs if conn.auth_method == "certificate_p12" else None
     p12_password = conn.cert_password if conn.auth_method == "certificate_p12" else None
@@ -95,6 +109,8 @@ class NiFiClientManager:
                 return
 
         log.info("Building client for %s", conn.name)
+        conn.connected = False
+        conn.nifi_version = ""
         client = _build_client(conn)
 
         # Validate by fetching version
@@ -105,7 +121,11 @@ class NiFiClientManager:
             log.info("Connected to %s — NiFi %s", conn.name, version)
         except Exception:
             log.warning("Cannot verify connection %s", conn.name)
-            conn.nifi_version = "unknown"
+            try:
+                client.session.close()
+            except Exception:
+                pass
+            raise
 
         with self._lock:
             existing = self._clients.get(conn.name)

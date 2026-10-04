@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 import pytest
+import requests
 from unittest.mock import MagicMock, patch
 
 from gateway.nifi_client_manager import (
@@ -90,17 +91,24 @@ class TestClientManagerConnect:
             mgr.connect(conn)  # second call — should skip
             assert build_mock.call_count == 1
 
-    def test_connect_version_failure_uses_unknown(self):
+    @pytest.mark.parametrize("close_error", [None, RuntimeError("synthetic close failure")])
+    def test_connect_validation_failure_closes_session_and_clears_stale_status(self, close_error):
         mgr = NiFiClientManager()
-        conn = ConnectionInfo(name="a", url="https://nifi/nifi-api")
+        conn = ConnectionInfo(
+            name="a", url="https://synthetic.example.test", connected=True, nifi_version="2.0.0"
+        )
 
-        mock_client = _make_mock_client()
-        mock_client.get_version_info.side_effect = Exception("unreachable")
-        with patch("gateway.nifi_client_manager._build_client", return_value=mock_client):
-            mgr.connect(conn)
+        with patch.object(requests.Session, "request", side_effect=requests.ConnectionError("synthetic offline")), \
+             patch.object(requests.Session, "close", side_effect=close_error) as close:
+            with pytest.raises(requests.ConnectionError, match="synthetic offline"):
+                mgr.connect(conn)
 
-        assert conn.nifi_version == "unknown"
-        assert conn.connected is True  # still stored
+        assert conn.connected is False
+        assert conn.nifi_version == ""
+        assert "a" not in mgr.get_status()["connections"]
+        with pytest.raises(ValueError, match="not connected"):
+            mgr.switch("a")
+        close.assert_called_once()
 
     def test_disconnect_removes_client(self):
         mgr = NiFiClientManager()

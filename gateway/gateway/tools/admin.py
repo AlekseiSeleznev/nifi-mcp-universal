@@ -52,7 +52,7 @@ def _resolve_password(arguments: dict) -> str:
 TOOLS: list[Tool] = [
     Tool(
         name="connect_nifi",
-        description="Register and connect to a NiFi instance. Provide name, url, auth_method and credentials.",
+        description="Register and connect to a NiFi instance with a new name. Existing names are preserved; use switch_nifi or edit the connection in the dashboard.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -75,6 +75,9 @@ TOOLS: list[Tool] = [
                 },
                 "readonly": {"type": "boolean", "description": "Read-only mode (default true)", "default": True},
                 "verify_ssl": {"type": "boolean", "description": "Verify SSL (default true)", "default": True},
+                "cert_path": {"type": "string", "description": "Certificate file relative to gateway /data/certs (P12 or PEM). Upload via dashboard or provision on the gateway; not a path on the MCP client's machine."},
+                "cert_password": {"type": "string", "description": "Password for the P12 certificate"},
+                "cert_key_path": {"type": "string", "description": "PEM private key file relative to gateway /data/certs; required with certificate_pem"},
                 "knox_token": {"type": "string", "description": "Knox JWT token"},
                 "knox_cookie": {"type": "string", "description": "Knox cookie"},
                 "knox_passcode": {"type": "string", "description": "Knox passcode"},
@@ -139,6 +142,9 @@ TOOLS: list[Tool] = [
                     "description": "Authentication method. Aliases: knox_jwt->knox_token, no_auth->none.",
                 },
                 "verify_ssl": {"type": "boolean", "default": True},
+                "cert_path": {"type": "string", "description": "Certificate file relative to gateway /data/certs (P12 or PEM). Upload via dashboard or provision on the gateway; not a path on the MCP client's machine."},
+                "cert_password": {"type": "string", "description": "Password for the P12 certificate"},
+                "cert_key_path": {"type": "string", "description": "PEM private key file relative to gateway /data/certs; required with certificate_pem"},
                 "knox_token": {"type": "string"},
                 "knox_cookie": {"type": "string"},
                 "knox_passcode": {"type": "string"},
@@ -171,6 +177,11 @@ async def handle(name: str, arguments: dict, session_id: str | None) -> list[Tex
         url = arguments["url"].strip()
         if not conn_name or not url:
             return _json_text({"error": "name and url are required"})
+        if registry.get(conn_name) is not None:
+            return _safe_tool_error(
+                "Connection name is already registered. Use switch_nifi to select it, "
+                "or edit the existing connection in the dashboard."
+            )
         try:
             auth_method = _resolve_auth_method(arguments)
         except ValueError as e:
@@ -179,6 +190,9 @@ async def handle(name: str, arguments: dict, session_id: str | None) -> list[Tex
             name=conn_name,
             url=url,
             auth_method=auth_method,
+            cert_path=arguments.get("cert_path", ""),
+            cert_password=arguments.get("cert_password", ""),
+            cert_key_path=arguments.get("cert_key_path", ""),
             readonly=arguments.get("readonly", True),
             verify_ssl=arguments.get("verify_ssl", True),
             knox_token=arguments.get("knox_token", ""),
@@ -237,6 +251,9 @@ async def handle(name: str, arguments: dict, session_id: str | None) -> list[Tex
                 name="__test__",
                 url=arguments["url"].strip(),
                 auth_method=auth_method,
+                cert_path=arguments.get("cert_path", ""),
+                cert_password=arguments.get("cert_password", ""),
+                cert_key_path=arguments.get("cert_key_path", ""),
                 verify_ssl=arguments.get("verify_ssl", True),
                 knox_token=arguments.get("knox_token", ""),
                 knox_cookie=arguments.get("knox_cookie", ""),
