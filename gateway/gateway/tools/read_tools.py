@@ -109,5 +109,5 @@ async def handle(name: str, arguments: dict, client: NiFiClient) -> list[TextCon
         payload = _redact_sensitive(result.payload) if result.redact else result.payload
         return _json_text(payload)
     except Exception:
-        log.exception("Read tool %s failed", name)
+        log.error("Read tool %s failed", name)
         return [TextContent(type="text", text="Error: read operation failed")]

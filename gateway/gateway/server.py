@@ -43,7 +43,7 @@ async def _session_cleanup_loop() -> None:
             if removed:
                 log.info("Cleaned up %d expired sessions", removed)
         except Exception:
-            log.exception("Session cleanup failed")
+            log.error("Session cleanup failed")
 
 
 @asynccontextmanager
@@ -58,7 +58,7 @@ async def lifespan(app: Starlette):
                 client_manager.connect(conn)
                 log.info("Restored connection to '%s'", conn.name)
         except Exception:
-            log.exception("Failed to restore '%s'", cfg["name"])
+            log.error("Failed to restore '%s'", cfg["name"])
 
     # Auto-connect default from env
     if settings.nifi_api_base and not registry.list_all():
@@ -82,7 +82,7 @@ async def lifespan(app: Starlette):
             client_manager.connect(conn)
             log.info("Connected to default NiFi")
         except Exception:
-            log.exception("Failed to connect to default NiFi")
+            log.error("Failed to connect to default NiFi")
 
     # Start background session cleanup
     cleanup_task = asyncio.create_task(_session_cleanup_loop())

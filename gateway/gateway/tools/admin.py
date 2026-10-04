@@ -192,7 +192,7 @@ async def handle(name: str, arguments: dict, session_id: str | None) -> list[Tex
         try:
             client_manager.connect(conn)
         except Exception:
-            log.exception("Connect NiFi failed for %s", conn_name)
+            log.error("Connect NiFi failed for %s", conn_name)
             registry.remove(conn_name)
             return _safe_tool_error("Connection failed")
         return _json_text({"ok": True, "name": conn_name, "nifi_version": conn.nifi_version})
@@ -254,7 +254,7 @@ async def handle(name: str, arguments: dict, session_id: str | None) -> list[Tex
             version = info.get("about", {}).get("version", "unknown")
             return _json_text({"ok": True, "nifi_version": version})
         except Exception:
-            log.exception("Test NiFi connection failed")
+            log.error("Test NiFi connection failed")
             return _safe_tool_error("Connection test failed", ok=False)
 
     return _json_text({"error": f"Unknown admin tool: {name}"})

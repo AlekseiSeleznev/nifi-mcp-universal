@@ -86,5 +86,5 @@ async def handle(name: str, arguments: dict, client: NiFiClient, readonly: bool)
             return _json_text({"error": f"Unknown write tool: {name}"})
         return _json_text(_redact_sensitive(data))
     except Exception:
-        log.exception("Write tool %s failed", name)
+        log.error("Write tool %s failed", name)
         return [TextContent(type="text", text="Error: write operation failed")]
