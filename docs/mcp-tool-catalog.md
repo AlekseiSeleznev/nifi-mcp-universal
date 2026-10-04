@@ -9,7 +9,7 @@ Regenerate with: `python3 tools/generate_tool_catalog.py`.
 
 | Tool | Description |
 |------|-------------|
-| `connect_nifi` | Register and connect to a NiFi instance. Provide name, url, auth_method and credentials. |
+| `connect_nifi` | Register and connect to a NiFi instance with a new name. Existing names are preserved; use switch_nifi or edit the connection in the dashboard. |
 | `disconnect_nifi` | Disconnect and remove a NiFi connection by name. |
 | `get_server_status` | Get MCP gateway status: active connections, sessions, default. |
 | `list_nifi_connections` | List all registered NiFi connections with their status. |

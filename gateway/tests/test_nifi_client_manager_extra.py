@@ -1,14 +1,112 @@
 from __future__ import annotations
 
-import os
+from pathlib import Path
 import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from gateway.nifi.client import NiFiClient
 from gateway.nifi_client_manager import CERTS_DIR, NiFiClientManager, SessionState, _build_client
 from gateway.nifi_registry import ConnectionInfo
+
+
+@pytest.mark.parametrize(
+    "auth_method,cert_path,cert_key_path",
+    [
+        ("certificate_p12", "", ""),
+        ("certificate_pem", "", ""),
+        ("certificate_pem", "nested/client.pem", ""),
+        ("certificate_pem", "", "nested/client.key"),
+    ],
+)
+def test_connect_requires_complete_certificate_configuration(auth_method, cert_path, cert_key_path):
+    manager = NiFiClientManager()
+    conn = ConnectionInfo(
+        name="synthetic", url="https://synthetic.example.test", auth_method=auth_method,
+        cert_path=cert_path, cert_key_path=cert_key_path, connected=True, nifi_version="2.0.0",
+    )
+    response = requests.Response()
+    response.status_code = 200
+    response._content = b'{"about": {"version": "2.11.0"}}'
+    with patch.object(requests.Session, "request", return_value=response) as request:
+        with pytest.raises(ValueError, match="required"):
+            manager.connect(conn)
+
+    request.assert_not_called()
+    assert conn.connected is False
+    assert conn.nifi_version == ""
+    assert manager.get_status()["connections"] == {}
+
+
+@pytest.mark.parametrize("field", ["cert_path", "cert_key_path"])
+@pytest.mark.parametrize("path_kind", ["absolute", "traversal", "symlink"])
+def test_connect_rejects_certificate_paths_outside_relative_certificate_storage(
+    tmp_path, monkeypatch, field, path_kind,
+):
+    certs = tmp_path / "certs"
+    certs.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    if path_kind == "symlink":
+        try:
+            (certs / "linked").symlink_to(outside, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("Creating directory symlinks is not supported in this environment")
+    monkeypatch.setattr("gateway.nifi_client_manager.CERTS_DIR", str(certs))
+    unsafe = {
+        "absolute": str(certs / "nested" / "client.pem"),
+        "traversal": "../outside/client.pem",
+        "symlink": "linked/client.pem",
+    }[path_kind]
+    paths = {"cert_path": "nested/client.pem", "cert_key_path": "nested/client.key", field: unsafe}
+    conn = ConnectionInfo(
+        name="synthetic", url="https://synthetic.example.test", auth_method="certificate_pem", **paths,
+    )
+    manager = NiFiClientManager()
+    response = requests.Response()
+    response.status_code = 200
+    response._content = b'{"about": {"version": "2.11.0"}}'
+    with patch.object(requests.Session, "request", return_value=response) as request:
+        with pytest.raises(ValueError, match="relative|inside"):
+            manager.connect(conn)
+
+    request.assert_not_called()
+    assert conn.connected is False
+    assert manager.get_status()["connections"] == {}
+
+
+def test_connect_preserves_nested_relative_certificate_paths(tmp_path, monkeypatch):
+    certs = tmp_path / "certs"
+    certs.mkdir()
+    monkeypatch.setattr("gateway.nifi_client_manager.CERTS_DIR", str(certs))
+    conn = ConnectionInfo(
+        name="synthetic", url="https://synthetic.example.test", auth_method="certificate_pem",
+        cert_path="nested/deeper/client.pem", cert_key_path="nested/deeper/client.key",
+    )
+    manager = NiFiClientManager()
+    sent_certificates = []
+
+    def request(session, *args, **kwargs):
+        sent_certificates.append(session.cert)
+        response = requests.Response()
+        response.status_code = 200
+        response._content = b'{"about": {"version": "2.11.0"}}'
+        return response
+
+    with patch.object(requests.Session, "request", request):
+        try:
+            manager.connect(conn)
+            assert conn.connected is True
+            assert conn.nifi_version == "2.11.0"
+            assert sent_certificates == [(
+                str(certs / "nested" / "deeper" / "client.pem"),
+                str(certs / "nested" / "deeper" / "client.key"),
+            )]
+            manager.switch("synthetic", "synthetic-session")
+        finally:
+            manager.close_all()
 
 
 def test_build_client_maps_auth_configuration(monkeypatch):
@@ -32,8 +130,8 @@ def test_build_client_maps_auth_configuration(monkeypatch):
         )
         _build_client(conn)
 
-    assert created["client_cert"] == os.path.join(CERTS_DIR, "prod/cert.pem")
-    assert created["client_key"] == os.path.join(CERTS_DIR, "prod/key.pem")
+    assert created["client_cert"] == str((Path(CERTS_DIR) / "prod/cert.pem").resolve())
+    assert created["client_key"] == str((Path(CERTS_DIR) / "prod/key.pem").resolve())
     assert created["verify"] is False
     nifi_cls.assert_called_once()
 
@@ -55,7 +153,7 @@ def test_build_client_maps_p12_and_basic_auth():
             cert_password="secret",
         )
         _build_client(conn)
-    assert created["p12_path"] == os.path.join(CERTS_DIR, "prod/client.p12")
+    assert created["p12_path"] == str((Path(CERTS_DIR) / "prod/client.p12").resolve())
     assert created["p12_password"] == "secret"
 
     created.clear()

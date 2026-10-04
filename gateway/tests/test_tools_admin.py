@@ -24,11 +24,9 @@ def _parse(result) -> dict | list:
 class TestConnectNiFi:
     @pytest.mark.asyncio
     async def test_connect_success(self):
-        mock_conn = ConnectionInfo(name="a", url="https://nifi/nifi-api", nifi_version="2.0.0")
-
         with patch("gateway.tools.admin.registry") as mock_registry, \
              patch("gateway.tools.admin.client_manager") as mock_mgr:
-            mock_registry.get.return_value = mock_conn
+            mock_registry.get.return_value = None
             mock_mgr.connect.return_value = None
 
             result = await admin.handle("connect_nifi", {"name": "a", "url": "https://nifi/nifi-api"}, None)
@@ -53,6 +51,7 @@ class TestConnectNiFi:
     async def test_connect_client_error_removes_registry_entry(self):
         with patch("gateway.tools.admin.registry") as mock_registry, \
              patch("gateway.tools.admin.client_manager") as mock_mgr:
+            mock_registry.get.return_value = None
             mock_mgr.connect.side_effect = Exception("Connection refused")
 
             result = await admin.handle("connect_nifi", {"name": "a", "url": "https://nifi"}, None)
@@ -66,6 +65,7 @@ class TestConnectNiFi:
     async def test_connect_accepts_auth_alias_and_username_password_aliases(self):
         with patch("gateway.tools.admin.registry") as mock_registry, \
              patch("gateway.tools.admin.client_manager") as mock_mgr:
+            mock_registry.get.return_value = None
             mock_mgr.connect.return_value = None
             result = await admin.handle(
                 "connect_nifi",

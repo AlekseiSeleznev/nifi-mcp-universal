@@ -161,6 +161,7 @@ docker image rm nifi-mcp-gateway 2>/dev/null || true
 - **Все NiFi-задачи — через MCP `nifi-mcp-universal`** (`http://localhost:8085/mcp`). Не гадать REST-пути и имена свойств.
 - **Pre-flight:** `list_nifi_connections` → если пусто, `connect_nifi` с `readonly=true` → `test_nifi_connection` → `get_root_process_group`.
 - Для сохранённого подключения вызывай `test_nifi_connection(name=...)`: это проверяет и сертификатную аутентификацию без повторной передачи секретов. Для нового подключения используй `url` и auth-параметры; `name` и `url` одновременно не передаются.
+- Для сертификатов `connect_nifi` и проверки нового URL передавай `cert_path` относительно `/data/certs` на gateway, `cert_password` для P12 или `cert_key_path` для PEM. Файлы предварительно размещаются на gateway или загружаются через dashboard; локальный путь MCP-клиента не подходит. Повторный `connect_nifi` с существующим именем отклоняется: используй `switch_nifi` или редактирование подключения в dashboard.
 - **Safe update:** всегда сначала `get_*_details` для взятия `version` (оптимистическая блокировка NiFi API).
 - **Provenance count:** для безопасного подсчёта используй только
   `get_provenance_event_count` с `component_id`, обязательным bounded

@@ -707,7 +707,10 @@ async def test_test_from_request_multipart_supports_certificate_p12(tmp_path: Pa
 
     assert _body(response) == {"ok": True, "nifi_version": "2.8.0"}
     fake_client.session.close.assert_called_once()
-    assert chmod_calls == [("client.p12", 0o600)]
+    assert len(chmod_calls) == 1
+    assert chmod_calls[0][0].endswith("-client.p12")
+    assert chmod_calls[0][1] == 0o600
+    assert list((tmp_path / "__test__").iterdir()) == []
 
 
 @pytest.mark.asyncio
@@ -738,7 +741,9 @@ async def test_test_from_request_multipart_supports_certificate_pem_and_size_lim
     )
 
     assert _body(ok) == {"ok": True, "nifi_version": "2.8.1"}
-    assert chmod_calls == [("client.pem", 0o600), ("client.key", 0o600)]
+    assert [name.rsplit("-", 1)[-1] for name, _ in chmod_calls] == ["client.pem", "client.key"]
+    assert all(mode == 0o600 for _, mode in chmod_calls)
+    assert list((tmp_path / "__test__").iterdir()) == []
 
     too_large_cert = await run_test_from_request(
         _DummyRequest(
