@@ -142,6 +142,20 @@ async def test_failed_connect_after_validation_restores_original_credentials(sav
 
 
 @pytest.mark.asyncio
+async def test_failed_rollback_does_not_report_a_connected_client(saved_connection):
+    registry, certs = saved_connection
+    registry.get("saved").connected = True
+    registry.get("saved").nifi_version = "2.8.0"
+    manager = MagicMock()
+    manager.connect.side_effect = RuntimeError("synthetic connect failure")
+    response = await _edit(_request(cert_password="synthetic-new"), registry, certs, manager=manager)
+    assert response.status_code == 502
+    assert not registry.get("saved").connected
+    assert registry.get("saved").nifi_version == ""
+    _assert_original_survives(registry, certs)
+
+
+@pytest.mark.asyncio
 async def test_duplicate_connect_rejects_upload_before_changing_existing_certificate(saved_connection):
     registry, certs = saved_connection
     upload = _upload("client.p12", b"replacement-certificate")

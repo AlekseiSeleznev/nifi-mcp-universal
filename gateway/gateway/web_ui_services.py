@@ -171,7 +171,10 @@ async def edit_from_request(
 
     old_conn = registry.get(old_name)
     # Rollback must retain in-memory secrets even when disk persistence is disabled.
-    old_conn_data = asdict(old_conn) if old_conn else None
+    old_conn_data = {
+        key: value for key, value in asdict(old_conn).items()
+        if key not in {"connected", "nifi_version"}
+    } if old_conn else None
 
     # Resolve new values, falling back to old connection data
     resolved_auth = auth_method if auth_method is not None else (old_conn.auth_method if old_conn else "none")
