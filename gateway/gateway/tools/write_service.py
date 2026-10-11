@@ -41,6 +41,8 @@ async def dispatch_write_tool(
     builder_cls=SmartFlowBuilder,
 ):
     # Processor lifecycle
+    if name == "run_once_processor":
+        return await _call_client(client, "run_once_processor", arguments["processor_id"], arguments["version"])
     if name == "start_processor":
         return await _call_client(client, "start_processor", arguments["processor_id"], arguments["version"])
     if name == "stop_processor":

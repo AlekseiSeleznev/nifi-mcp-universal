@@ -1,4 +1,4 @@
-"""36 write NiFi MCP tools (require readonly=false on the connection)."""
+"""37 write NiFi MCP tools (require readonly=false on the connection)."""
 
 from __future__ import annotations
 
@@ -27,6 +27,7 @@ def _json_text(data: Any) -> list[TextContent]:
 # --- Tool definitions ---
 
 TOOLS: list[Tool] = [
+    Tool(name="run_once_processor", description="Request RUN_ONCE for a processor. WRITE OPERATION. Read its current revision and verify stopped Timer/CRON scheduling first. One request, no automatic retry; independently read back on uncertainty. Runs once per configured execution node, not necessarily one FlowFile.", inputSchema={"type": "object", "additionalProperties": False, "properties": {"processor_id": {"type": "string"}, "version": {"type": "integer", "minimum": 0}}, "required": ["processor_id", "version"]}),
     # Processor lifecycle
     Tool(name="start_processor", description="Start a processor. WRITE OPERATION.", inputSchema={"type": "object", "properties": {"processor_id": {"type": "string"}, "version": {"type": "integer"}}, "required": ["processor_id", "version"]}),
     Tool(name="stop_processor", description="Stop a processor. WRITE OPERATION.", inputSchema={"type": "object", "properties": {"processor_id": {"type": "string"}, "version": {"type": "integer"}}, "required": ["processor_id", "version"]}),

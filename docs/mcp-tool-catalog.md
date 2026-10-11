@@ -1,6 +1,6 @@
 # MCP Tool Catalog
 
-Total tools: **68**.
+Total tools: **69**.
 
 Generated from `gateway/gateway/mcp_server.py` tool modules.
 Regenerate with: `python3 tools/generate_tool_catalog.py`.
@@ -47,7 +47,7 @@ Regenerate with: `python3 tools/generate_tool_catalog.py`.
 | `list_processors` | List processors in a process group (read-only). |
 | `search_flow` | Search the NiFi flow for components matching a query. |
 
-## `write_tools` (36)
+## `write_tools` (37)
 
 | Tool | Description |
 |------|-------------|
@@ -70,6 +70,7 @@ Regenerate with: `python3 tools/generate_tool_catalog.py`.
 | `empty_connection_queue` | Drop all flowfiles from a connection queue. WARNING: irreversible. WRITE OPERATION. |
 | `enable_all_controller_services_in_group` | Enable ALL controller services in a process group (bulk). WRITE OPERATION. |
 | `enable_controller_service` | Enable a controller service. WRITE OPERATION. |
+| `run_once_processor` | Request RUN_ONCE for a processor. WRITE OPERATION. Read its current revision and verify stopped Timer/CRON scheduling first. One request, no automatic retry; independently read back on uncertainty. Runs once per configured execution node, not necessarily one FlowFile. |
 | `start_all_processors_in_group` | Start ALL processors in a process group (bulk). WRITE OPERATION. |
 | `start_input_port` | Start an input port. WRITE OPERATION. |
 | `start_new_flow` | Create a new process group following best practices. RECOMMENDED way to start building flows. WRITE OPERATION. |

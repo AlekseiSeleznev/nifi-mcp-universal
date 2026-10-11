@@ -10,7 +10,7 @@ MCP-шлюз для Apache NiFi. Публикует один streamable HTTP end
 
 - даёт один HTTP MCP endpoint вместо ручной настройки каждого клиента;
 - поддерживает несколько подключений к NiFi и per-session routing;
-- включает `68` MCP tools для подключения, чтения, диагностики и write-операций;
+- включает `69` MCP tools для подключения, чтения, диагностики и write-операций;
 - поднимает dashboard на `http://localhost:8085/dashboard`;
 - поддерживает `7` методов аутентификации: `certificate_p12`, `certificate_pem`, `knox_token`, `knox_cookie`, `knox_passcode`, `basic`, `none`;
 - по умолчанию работает в `readonly=true`;
@@ -186,6 +186,13 @@ docker compose -f docker-compose.yml -f docker-compose.windows.yml up -d --build
 `get_provenance_event_count`; его bounded inputs, async cleanup, fail-closed
 результат и требуемые NiFi policies описаны в
 [docs/provenance-event-count.md](docs/provenance-event-count.md).
+
+Для явно разрешённого одиночного вызова используйте `run_once_processor` с
+актуальной revision остановленного процессора. NiFi поддерживает Run Once для
+Timer/CRON scheduling; вызов выполняется на каждом настроенном execution node,
+может обработать несколько FlowFiles или не выполниться при back pressure либо
+отсутствии входных данных. После timeout/conflict перечитайте состояние и
+результаты перед намеренным повтором; инструмент автоматически не повторяет PUT.
 
 ### Сохранение сертификата и пароля после перезапуска
 

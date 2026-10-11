@@ -662,6 +662,17 @@ class NiFiClient:
 
 	# ===== Write Methods (require NIFI_READONLY=false) =====
 	
+	def run_once_processor(self, processor_id: str, version: int) -> Dict[str, Any]:
+		"""Request RUN_ONCE with one PUT; read back before any deliberate retry."""
+		if not isinstance(processor_id, str) or not _SAFE_PROVENANCE_COMPONENT_ID.fullmatch(processor_id):
+			raise ValueError("Invalid processor identifier")
+		if type(version) is not int or version < 0:
+			raise ValueError("A nonnegative current revision is required")
+		return self._request_json_once("PUT", f"processors/{processor_id}/run-status", data={
+			"revision": {"version": version},
+			"state": "RUN_ONCE",
+		})
+
 	def start_processor(self, processor_id: str, version: int) -> Dict[str, Any]:
 		"""Start a processor. Requires NIFI_READONLY=false."""
 		return self._put(

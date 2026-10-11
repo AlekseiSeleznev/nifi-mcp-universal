@@ -193,7 +193,14 @@ fi
 echo ""
 echo "=== Building and starting container ==="
 info "Using port ${PORT} (restart: always — survives reboot)"
-docker compose up -d --build --remove-orphans
+if [ "$OS" = "linux" ] && [ "$SETUP_CI" = "1" ]; then
+  # Noninteractive Bake requires an explicit grant for our existing host build.
+  # Scope the grant to this build target; do not rebuild through Compose again.
+  docker buildx bake -f docker-compose.yml --allow=network.host --load gateway
+  docker compose up -d --no-build --remove-orphans
+else
+  docker compose up -d --build --remove-orphans
+fi
 ok "Container started"
 
 echo ""
