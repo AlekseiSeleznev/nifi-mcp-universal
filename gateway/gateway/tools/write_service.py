@@ -79,6 +79,12 @@ async def dispatch_write_tool(
             arguments["destination_type"],
             rel_list,
         )
+    if name == "update_connection":
+        return await _call_client(
+            client, "update_connection", arguments["connection_id"], arguments["version"],
+            arguments["destination_id"], arguments["destination_type"],
+            arguments["destination_group_id"], arguments["relationships"],
+        )
     if name == "delete_connection":
         return await _call_client(client, "delete_connection", arguments["connection_id"], arguments["version"])
     if name == "empty_connection_queue":

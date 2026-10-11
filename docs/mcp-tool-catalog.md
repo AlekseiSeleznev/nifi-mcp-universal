@@ -1,6 +1,6 @@
 # MCP Tool Catalog
 
-Total tools: **67**.
+Total tools: **68**.
 
 Generated from `gateway/gateway/mcp_server.py` tool modules.
 Regenerate with: `python3 tools/generate_tool_catalog.py`.
@@ -47,7 +47,7 @@ Regenerate with: `python3 tools/generate_tool_catalog.py`.
 | `list_processors` | List processors in a process group (read-only). |
 | `search_flow` | Search the NiFi flow for components matching a query. |
 
-## `write_tools` (35)
+## `write_tools` (36)
 
 | Tool | Description |
 |------|-------------|
@@ -80,6 +80,7 @@ Regenerate with: `python3 tools/generate_tool_catalog.py`.
 | `stop_output_port` | Stop an output port. WRITE OPERATION. |
 | `stop_processor` | Stop a processor. WRITE OPERATION. |
 | `terminate_processor` | Forcefully terminate a stuck processor. Last resort. WRITE OPERATION. |
+| `update_connection` | Retarget an existing connection without replacing it. WRITE OPERATION. Read its current revision first; on conflict or timeout independently read back before a deliberate retry. |
 | `update_controller_service_properties` | Update controller service properties (must be DISABLED). WRITE OPERATION. |
 | `update_input_port` | Rename an input port. WRITE OPERATION. |
 | `update_output_port` | Rename an output port. WRITE OPERATION. |

@@ -10,7 +10,7 @@ MCP-шлюз для Apache NiFi. Публикует один streamable HTTP end
 
 - даёт один HTTP MCP endpoint вместо ручной настройки каждого клиента;
 - поддерживает несколько подключений к NiFi и per-session routing;
-- включает `67` MCP tools для подключения, чтения, диагностики и write-операций;
+- включает `68` MCP tools для подключения, чтения, диагностики и write-операций;
 - поднимает dashboard на `http://localhost:8085/dashboard`;
 - поддерживает `7` методов аутентификации: `certificate_p12`, `certificate_pem`, `knox_token`, `knox_cookie`, `knox_passcode`, `basic`, `none`;
 - по умолчанию работает в `readonly=true`;

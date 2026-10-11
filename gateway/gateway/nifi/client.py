@@ -741,6 +741,35 @@ class NiFiClient:
 			}
 		)
 	
+	def update_connection(
+		self, connection_id: str, version: int, destination_id: str,
+		destination_type: str, destination_group_id: str, relationships: list[str],
+	) -> Dict[str, Any]:
+		"""Retarget an existing connection with one revision-checked PUT attempt.
+
+		Keep its identity, source and omitted queue settings. On uncertainty,
+		read back the connection before any deliberate retry.
+		"""
+		for identifier in (connection_id, destination_id, destination_group_id):
+			if not isinstance(identifier, str) or not _SAFE_PROVENANCE_COMPONENT_ID.fullmatch(identifier):
+				raise ValueError("Invalid connection/component identifier")
+		if type(version) is not int or version < 0:
+			raise ValueError("A nonnegative current revision is required")
+		if destination_type not in {"PROCESSOR", "INPUT_PORT", "OUTPUT_PORT", "FUNNEL"}:
+			raise ValueError("Unsupported destination type")
+		if not isinstance(relationships, list) or not relationships or any(
+			not isinstance(value, str) or not value.strip() for value in relationships
+		) or len(set(relationships)) != len(relationships):
+			raise ValueError("Unique nonempty relationships are required")
+		return self._request_json_once("PUT", f"connections/{connection_id}", data={
+			"revision": {"version": version},
+			"component": {
+				"id": connection_id,
+				"destination": {"id": destination_id, "type": destination_type, "groupId": destination_group_id},
+				"selectedRelationships": relationships,
+			},
+		})
+
 	def delete_connection(self, connection_id: str, version: int, disconnected_ack: bool = False) -> Dict[str, Any]:
 		"""Delete a connection. Requires NIFI_READONLY=false.
 		
