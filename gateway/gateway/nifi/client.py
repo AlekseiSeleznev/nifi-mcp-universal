@@ -753,32 +753,39 @@ class NiFiClient:
 		)
 	
 	def update_connection(
-		self, connection_id: str, version: int, destination_id: str,
-		destination_type: str, destination_group_id: str, relationships: list[str],
+		self, connection_id: str, version: int, destination_id: Optional[str] = None,
+		destination_type: Optional[str] = None, destination_group_id: Optional[str] = None,
+		relationships: Optional[list[str]] = None,
 	) -> Dict[str, Any]:
-		"""Retarget an existing connection with one revision-checked PUT attempt.
+		"""Update owned fields with one revision-checked PUT attempt.
 
-		Keep its identity, source and omitted queue settings. On uncertainty,
+		Omit relationships to preserve port-source connections. A supplied
+		destination must be complete; at least one change must be supplied.
+		Keep identity, source and omitted queue settings. On uncertainty,
 		read back the connection before any deliberate retry.
 		"""
-		for identifier in (connection_id, destination_id, destination_group_id):
-			if not isinstance(identifier, str) or not _SAFE_PROVENANCE_COMPONENT_ID.fullmatch(identifier):
-				raise ValueError("Invalid connection/component identifier")
+		if not isinstance(connection_id, str) or not _SAFE_PROVENANCE_COMPONENT_ID.fullmatch(connection_id):
+			raise ValueError("Invalid connection/component identifier")
 		if type(version) is not int or version < 0:
 			raise ValueError("A nonnegative current revision is required")
-		if destination_type not in {"PROCESSOR", "INPUT_PORT", "OUTPUT_PORT", "FUNNEL"}:
-			raise ValueError("Unsupported destination type")
-		if not isinstance(relationships, list) or not relationships or any(
-			not isinstance(value, str) or not value.strip() for value in relationships
-		) or len(set(relationships)) != len(relationships):
-			raise ValueError("Unique nonempty relationships are required")
+		component = {"id": connection_id}
+		if any(value is not None for value in (destination_id, destination_type, destination_group_id)):
+			for identifier in (destination_id, destination_group_id):
+				if not isinstance(identifier, str) or not _SAFE_PROVENANCE_COMPONENT_ID.fullmatch(identifier):
+					raise ValueError("A complete valid destination is required")
+			if destination_type not in {"PROCESSOR", "INPUT_PORT", "OUTPUT_PORT", "FUNNEL"}:
+				raise ValueError("Unsupported destination type")
+			component["destination"] = {"id": destination_id, "type": destination_type, "groupId": destination_group_id}
+		if relationships is not None:
+			if not isinstance(relationships, list) or not relationships or any(
+				not isinstance(value, str) or not value.strip() for value in relationships
+			) or len(set(relationships)) != len(relationships):
+				raise ValueError("Unique nonempty relationships are required")
+			component["selectedRelationships"] = relationships
+		if len(component) == 1:
+			raise ValueError("At least one connection change is required")
 		return self._request_json_once("PUT", f"connections/{connection_id}", data={
-			"revision": {"version": version},
-			"component": {
-				"id": connection_id,
-				"destination": {"id": destination_id, "type": destination_type, "groupId": destination_group_id},
-				"selectedRelationships": relationships,
-			},
+			"revision": {"version": version}, "component": component,
 		})
 
 	def delete_connection(self, connection_id: str, version: int, disconnected_ack: bool = False) -> Dict[str, Any]:

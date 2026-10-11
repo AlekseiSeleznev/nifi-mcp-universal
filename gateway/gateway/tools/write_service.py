@@ -84,8 +84,8 @@ async def dispatch_write_tool(
     if name == "update_connection":
         return await _call_client(
             client, "update_connection", arguments["connection_id"], arguments["version"],
-            arguments["destination_id"], arguments["destination_type"],
-            arguments["destination_group_id"], arguments["relationships"],
+            arguments.get("destination_id"), arguments.get("destination_type"),
+            arguments.get("destination_group_id"), arguments.get("relationships"),
         )
     if name == "delete_connection":
         return await _call_client(client, "delete_connection", arguments["connection_id"], arguments["version"])

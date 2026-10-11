@@ -81,7 +81,7 @@ Regenerate with: `python3 tools/generate_tool_catalog.py`.
 | `stop_output_port` | Stop an output port. WRITE OPERATION. |
 | `stop_processor` | Stop a processor. WRITE OPERATION. |
 | `terminate_processor` | Forcefully terminate a stuck processor. Last resort. WRITE OPERATION. |
-| `update_connection` | Retarget an existing connection without replacing it. WRITE OPERATION. Read its current revision first; on conflict or timeout independently read back before a deliberate retry. |
+| `update_connection` | Update an existing connection without replacing it. Omit relationships to preserve port-source connections; an explicit empty list is rejected. Supply a complete destination or nonempty relationships. WRITE OPERATION. Read its current revision first; on conflict or timeout independently read back before a deliberate retry. |
 | `update_controller_service_properties` | Update controller service properties (must be DISABLED). WRITE OPERATION. |
 | `update_input_port` | Rename an input port. WRITE OPERATION. |
 | `update_output_port` | Rename an output port. WRITE OPERATION. |
